@@ -104,9 +104,20 @@ app.use((err, req, res, next) => { console.error('Server error:', err.stack); re
 
 // ─── START ────────────────────────────────────────────────────────────────────
 const PORT = process.env.PORT || 5000;
-app.listen(PORT, '0.0.0.0', () => {
-  console.log(`🌱 Krushi Sathi AI API running on http://0.0.0.0:${PORT}`);
-  console.log(`📡 Health check: http://localhost:${PORT}/api/health`);
+const migrate = require('./migrate');
+
+migrate().then(() => {
+  console.log('Database migration completed.');
+  app.listen(PORT, '0.0.0.0', () => {
+    console.log(`🌱 Krushi Sathi AI API running on http://0.0.0.0:${PORT}`);
+    console.log(`📡 Health check: http://localhost:${PORT}/api/health`);
+  });
+}).catch((err) => {
+  console.error('Database migration failed to complete on startup:', err);
+  // Still start server even if DB fails to connect initially so logs can be checked
+  app.listen(PORT, '0.0.0.0', () => {
+    console.log(`🌱 Krushi Sathi AI API running on http://0.0.0.0:${PORT} (Migration failed)`);
+  });
 });
 
 module.exports = app;
