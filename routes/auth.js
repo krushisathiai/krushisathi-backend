@@ -205,6 +205,8 @@ router.get('/profile', async (req, res) => {
     }
     res.status(500).json({ success: false, message: 'Server error' });
   }
+});
+
 // ─── DELETE ACCOUNT ──────────────────────────────────────────────────────────
 // DELETE /api/auth/delete (protected)
 router.delete('/delete', async (req, res) => {
