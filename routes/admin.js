@@ -1,0 +1,390 @@
+const express = require('express');
+const router = express.Router();
+const jwt = require('jsonwebtoken');
+const db = require('../db');
+const { adminMiddleware } = require('../middleware/auth');
+
+const ADMIN_EMAIL = process.env.ADMIN_EMAIL || 'admin@krushisathi.com';
+const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'Admin@2024';
+
+// ─── ADMIN LOGIN ──────────────────────────────────────────────────────────────
+// POST /api/admin/login
+router.post('/login', async (req, res) => {
+  try {
+    const { email, password } = req.body;
+
+    if (!email || !password) {
+      return res.status(400).json({ success: false, message: 'Email and password are required' });
+    }
+
+    if (email !== ADMIN_EMAIL || password !== ADMIN_PASSWORD) {
+      return res.status(401).json({ success: false, message: 'Invalid admin credentials' });
+    }
+
+    const token = jwt.sign(
+      { email, isAdmin: true, role: 'admin' },
+      process.env.JWT_SECRET,
+      { expiresIn: '1d' }
+    );
+
+    res.json({
+      success: true,
+      message: 'Admin login successful',
+      token,
+      admin: { email, role: 'admin', name: 'Krushi Sathi Admin' }
+    });
+  } catch (err) {
+    console.error('Admin login error:', err);
+    res.status(500).json({ success: false, message: 'Server error' });
+  }
+});
+
+// ─── ADMIN DASHBOARD STATS ───────────────────────────────────────────────────
+// GET /api/admin/dashboard
+router.get('/dashboard', adminMiddleware, async (req, res) => {
+  try {
+    const [totalUsers] = await db.query('SELECT COUNT(*) as count FROM users');
+    const [totalScans] = await db.query('SELECT COUNT(*) as count FROM scans');
+    const [diseasesDetected] = await db.query("SELECT COUNT(*) as count FROM scans WHERE disease_name != 'Healthy Plant'");
+    const [healthyPlants] = await db.query("SELECT COUNT(*) as count FROM scans WHERE disease_name = 'Healthy Plant'");
+    const [totalAlerts] = await db.query('SELECT COUNT(*) as count FROM alerts');
+    const [totalQuestions] = await db.query('SELECT COUNT(*) as count FROM expert_questions');
+    const [pendingQuestions] = await db.query('SELECT COUNT(*) as count FROM expert_questions WHERE answer IS NULL');
+
+    // Recent users (last 5)
+    const [recentUsers] = await db.query(
+      'SELECT id, full_name, mobile_number, email, created_at FROM users ORDER BY created_at DESC LIMIT 5'
+    );
+
+    // Recent scans (last 5)
+    const [recentScans] = await db.query(
+      `SELECT s.id, s.crop_name, s.disease_name, s.severity, s.scanned_at, u.full_name as user_name
+       FROM scans s JOIN users u ON s.user_id = u.id
+       ORDER BY s.scanned_at DESC LIMIT 5`
+    );
+
+    // Disease distribution
+    const [diseaseDistribution] = await db.query(
+      `SELECT disease_name, COUNT(*) as count FROM scans
+       WHERE disease_name IS NOT NULL
+       GROUP BY disease_name ORDER BY count DESC LIMIT 5`
+    );
+
+    // Monthly scan count (last 6 months)
+    const [monthlyScanData] = await db.query(
+      `SELECT DATE_FORMAT(scanned_at, '%Y-%m') as month, COUNT(*) as count
+       FROM scans
+       WHERE scanned_at >= DATE_SUB(NOW(), INTERVAL 6 MONTH)
+       GROUP BY month ORDER BY month ASC`
+    );
+
+    res.json({
+      success: true,
+      stats: {
+        total_users: totalUsers[0].count,
+        total_scans: totalScans[0].count,
+        diseases_detected: diseasesDetected[0].count,
+        healthy_plants: healthyPlants[0].count,
+        total_alerts: totalAlerts[0].count,
+        total_questions: totalQuestions[0].count,
+        pending_questions: pendingQuestions[0].count,
+      },
+      recent_users: recentUsers,
+      recent_scans: recentScans,
+      disease_distribution: diseaseDistribution,
+      monthly_scan_data: monthlyScanData,
+    });
+  } catch (err) {
+    console.error('Admin dashboard error:', err);
+    res.status(500).json({ success: false, message: 'Server error' });
+  }
+});
+
+// ─── GET ALL USERS ────────────────────────────────────────────────────────────
+// GET /api/admin/users
+router.get('/users', adminMiddleware, async (req, res) => {
+  try {
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 10;
+    const search = req.query.search || '';
+    const offset = (page - 1) * limit;
+
+    let whereClause = '';
+    let params = [];
+
+    if (search) {
+      whereClause = 'WHERE full_name LIKE ? OR mobile_number LIKE ? OR email LIKE ?';
+      params = [`%${search}%`, `%${search}%`, `%${search}%`];
+    }
+
+    const [users] = await db.query(
+      `SELECT id, full_name, mobile_number, email, is_verified, location, farm_size, main_crop, created_at
+       FROM users ${whereClause}
+       ORDER BY created_at DESC LIMIT ? OFFSET ?`,
+      [...params, limit, offset]
+    );
+
+    const [total] = await db.query(
+      `SELECT COUNT(*) as count FROM users ${whereClause}`,
+      params
+    );
+
+    // Get scan count per user
+    const userIds = users.map(u => u.id);
+    let scanCounts = {};
+    if (userIds.length > 0) {
+      const [scanData] = await db.query(
+        `SELECT user_id, COUNT(*) as count FROM scans WHERE user_id IN (${userIds.map(() => '?').join(',')}) GROUP BY user_id`,
+        userIds
+      );
+      scanData.forEach(s => { scanCounts[s.user_id] = s.count; });
+    }
+
+    const usersWithStats = users.map(u => ({ ...u, scan_count: scanCounts[u.id] || 0 }));
+
+    res.json({
+      success: true,
+      users: usersWithStats,
+      pagination: {
+        current_page: page,
+        total_pages: Math.ceil(total[0].count / limit),
+        total_users: total[0].count,
+        per_page: limit,
+      }
+    });
+  } catch (err) {
+    console.error('Admin get users error:', err);
+    res.status(500).json({ success: false, message: 'Server error' });
+  }
+});
+
+// ─── DELETE USER ──────────────────────────────────────────────────────────────
+// DELETE /api/admin/users/:id
+router.delete('/users/:id', adminMiddleware, async (req, res) => {
+  try {
+    const [users] = await db.query('SELECT id FROM users WHERE id = ?', [req.params.id]);
+    if (users.length === 0) {
+      return res.status(404).json({ success: false, message: 'User not found' });
+    }
+    await db.query('DELETE FROM users WHERE id = ?', [req.params.id]);
+    res.json({ success: true, message: 'User deleted successfully' });
+  } catch (err) {
+    console.error('Admin delete user error:', err);
+    res.status(500).json({ success: false, message: 'Server error' });
+  }
+});
+
+// ─── GET ALL SCANS ────────────────────────────────────────────────────────────
+// GET /api/admin/scans
+router.get('/scans', adminMiddleware, async (req, res) => {
+  try {
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 10;
+    const search = req.query.search || '';
+    const severity = req.query.severity || '';
+    const offset = (page - 1) * limit;
+
+    let conditions = [];
+    let params = [];
+
+    if (search) {
+      conditions.push('(s.crop_name LIKE ? OR s.disease_name LIKE ? OR u.full_name LIKE ?)');
+      params.push(`%${search}%`, `%${search}%`, `%${search}%`);
+    }
+    if (severity) {
+      conditions.push('s.severity = ?');
+      params.push(severity);
+    }
+
+    const whereClause = conditions.length ? 'WHERE ' + conditions.join(' AND ') : '';
+
+    const [scans] = await db.query(
+      `SELECT s.id, s.crop_name, s.disease_name, s.severity, s.confidence_score, s.image_url, s.scanned_at,
+              u.full_name as user_name, u.mobile_number as user_mobile
+       FROM scans s JOIN users u ON s.user_id = u.id
+       ${whereClause}
+       ORDER BY s.scanned_at DESC LIMIT ? OFFSET ?`,
+      [...params, limit, offset]
+    );
+
+    const [total] = await db.query(
+      `SELECT COUNT(*) as count FROM scans s JOIN users u ON s.user_id = u.id ${whereClause}`,
+      params
+    );
+
+    res.json({
+      success: true,
+      scans,
+      pagination: {
+        current_page: page,
+        total_pages: Math.ceil(total[0].count / limit),
+        total_scans: total[0].count,
+        per_page: limit,
+      }
+    });
+  } catch (err) {
+    console.error('Admin get scans error:', err);
+    res.status(500).json({ success: false, message: 'Server error' });
+  }
+});
+
+// ─── DELETE SCAN ──────────────────────────────────────────────────────────────
+// DELETE /api/admin/scans/:id
+router.delete('/scans/:id', adminMiddleware, async (req, res) => {
+  try {
+    const [scans] = await db.query('SELECT id FROM scans WHERE id = ?', [req.params.id]);
+    if (scans.length === 0) {
+      return res.status(404).json({ success: false, message: 'Scan not found' });
+    }
+    await db.query('DELETE FROM scans WHERE id = ?', [req.params.id]);
+    res.json({ success: true, message: 'Scan deleted successfully' });
+  } catch (err) {
+    console.error('Admin delete scan error:', err);
+    res.status(500).json({ success: false, message: 'Server error' });
+  }
+});
+
+// ─── GET ALL ALERTS ───────────────────────────────────────────────────────────
+// GET /api/admin/alerts
+router.get('/alerts', adminMiddleware, async (req, res) => {
+  try {
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 10;
+    const offset = (page - 1) * limit;
+
+    const [alerts] = await db.query(
+      `SELECT a.*, u.full_name as user_name FROM alerts a
+       LEFT JOIN users u ON a.user_id = u.id
+       ORDER BY a.created_at DESC LIMIT ? OFFSET ?`,
+      [limit, offset]
+    );
+
+    const [total] = await db.query('SELECT COUNT(*) as count FROM alerts');
+
+    res.json({
+      success: true,
+      alerts,
+      pagination: {
+        current_page: page,
+        total_pages: Math.ceil(total[0].count / limit),
+        total_alerts: total[0].count,
+        per_page: limit,
+      }
+    });
+  } catch (err) {
+    console.error('Admin get alerts error:', err);
+    res.status(500).json({ success: false, message: 'Server error' });
+  }
+});
+
+// ─── CREATE ALERT ─────────────────────────────────────────────────────────────
+// POST /api/admin/alerts
+router.post('/alerts', adminMiddleware, async (req, res) => {
+  try {
+    const { title, message, type, user_id, scheduled_at } = req.body;
+
+    if (!title || !message) {
+      return res.status(400).json({ success: false, message: 'Title and message are required' });
+    }
+
+    const [result] = await db.query(
+      'INSERT INTO alerts (title, message, type, user_id, scheduled_at) VALUES (?, ?, ?, ?, ?)',
+      [title, message, type || 'general', user_id || null, scheduled_at || null]
+    );
+
+    const [alert] = await db.query('SELECT * FROM alerts WHERE id = ?', [result.insertId]);
+
+    res.status(201).json({ success: true, message: 'Alert created successfully', alert: alert[0] });
+  } catch (err) {
+    console.error('Admin create alert error:', err);
+    res.status(500).json({ success: false, message: 'Server error' });
+  }
+});
+
+// ─── DELETE ALERT ─────────────────────────────────────────────────────────────
+// DELETE /api/admin/alerts/:id
+router.delete('/alerts/:id', adminMiddleware, async (req, res) => {
+  try {
+    const [alerts] = await db.query('SELECT id FROM alerts WHERE id = ?', [req.params.id]);
+    if (alerts.length === 0) {
+      return res.status(404).json({ success: false, message: 'Alert not found' });
+    }
+    await db.query('DELETE FROM alerts WHERE id = ?', [req.params.id]);
+    res.json({ success: true, message: 'Alert deleted successfully' });
+  } catch (err) {
+    console.error('Admin delete alert error:', err);
+    res.status(500).json({ success: false, message: 'Server error' });
+  }
+});
+
+// ─── GET ALL EXPERT QUESTIONS ─────────────────────────────────────────────────
+// GET /api/admin/expert-questions
+router.get('/expert-questions', adminMiddleware, async (req, res) => {
+  try {
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 10;
+    const status = req.query.status || ''; // 'answered' | 'pending'
+    const offset = (page - 1) * limit;
+
+    let whereClause = '';
+    if (status === 'pending') whereClause = 'WHERE eq.answer IS NULL';
+    else if (status === 'answered') whereClause = 'WHERE eq.answer IS NOT NULL';
+
+    const [questions] = await db.query(
+      `SELECT eq.*, u.full_name as user_name, u.mobile_number as user_mobile
+       FROM expert_questions eq JOIN users u ON eq.user_id = u.id
+       ${whereClause}
+       ORDER BY eq.created_at DESC LIMIT ? OFFSET ?`,
+      [limit, offset]
+    );
+
+    const [total] = await db.query(
+      `SELECT COUNT(*) as count FROM expert_questions eq ${whereClause}`
+    );
+
+    res.json({
+      success: true,
+      questions,
+      pagination: {
+        current_page: page,
+        total_pages: Math.ceil(total[0].count / limit),
+        total_questions: total[0].count,
+        per_page: limit,
+      }
+    });
+  } catch (err) {
+    console.error('Admin get expert questions error:', err);
+    res.status(500).json({ success: false, message: 'Server error' });
+  }
+});
+
+// ─── ANSWER EXPERT QUESTION ───────────────────────────────────────────────────
+// PUT /api/admin/expert-questions/:id/answer
+router.put('/expert-questions/:id/answer', adminMiddleware, async (req, res) => {
+  try {
+    const { answer, answered_by } = req.body;
+
+    if (!answer) {
+      return res.status(400).json({ success: false, message: 'Answer is required' });
+    }
+
+    const [questions] = await db.query('SELECT id FROM expert_questions WHERE id = ?', [req.params.id]);
+    if (questions.length === 0) {
+      return res.status(404).json({ success: false, message: 'Question not found' });
+    }
+
+    await db.query(
+      'UPDATE expert_questions SET answer = ?, answered_by = ?, answered_at = NOW() WHERE id = ?',
+      [answer, answered_by || 'Admin', req.params.id]
+    );
+
+    const [updated] = await db.query('SELECT * FROM expert_questions WHERE id = ?', [req.params.id]);
+
+    res.json({ success: true, message: 'Question answered successfully', question: updated[0] });
+  } catch (err) {
+    console.error('Admin answer question error:', err);
+    res.status(500).json({ success: false, message: 'Server error' });
+  }
+});
+
+module.exports = router;

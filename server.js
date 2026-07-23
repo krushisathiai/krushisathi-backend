@@ -19,6 +19,7 @@ app.use('/api/alerts', require('./routes/alerts'));
 app.use('/api/fertilizers', require('./routes/fertilizers'));
 app.use('/api/expert', require('./routes/expert'));
 app.use('/api/urea', require('./routes/urea'));
+app.use('/api/admin', require('./routes/admin'));
 
 // ─── HEALTH CHECK ─────────────────────────────────────────────────────────────
 app.get('/api/health', (req, res) => {
