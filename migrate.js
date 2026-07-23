@@ -26,7 +26,12 @@ async function migrate() {
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       )
     `);
-    console.log('Users table checked/created.');
+    
+    // Add new columns if they don't exist
+    await db.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS role VARCHAR(50) DEFAULT 'user'`);
+    await db.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS shop_name VARCHAR(150)`);
+    await db.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS shop_location VARCHAR(200)`);
+    console.log('Users table checked/created with new columns.');
 
     // 2. Create Scans Table
     await db.query(`
@@ -127,6 +132,26 @@ async function migrate() {
       )
     `);
     console.log('Urea requests table checked/created.');
+
+    // 8. Create Shop Products Table
+    await db.query(`
+      CREATE TABLE IF NOT EXISTS shop_products (
+        id SERIAL PRIMARY KEY,
+        shop_owner_id INT NOT NULL,
+        name VARCHAR(150) NOT NULL,
+        category VARCHAR(100),
+        company VARCHAR(100),
+        price DECIMAL(10,2),
+        stock_quantity INT DEFAULT 0,
+        unit VARCHAR(50),
+        description TEXT,
+        image_url VARCHAR(255),
+        status VARCHAR(50) DEFAULT 'Available',
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (shop_owner_id) REFERENCES users(id) ON DELETE CASCADE
+      )
+    `);
+    console.log('Shop products table checked/created.');
 
     // ─── SEED REFERENCE DATA ───────────────────────────────────────────────────
 

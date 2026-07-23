@@ -20,8 +20,28 @@ CREATE TABLE IF NOT EXISTS users (
   main_crop VARCHAR(100),
   soil_type VARCHAR(100),
   sowing_date DATE,
+  role ENUM('user', 'shop_owner') DEFAULT 'user',
+  shop_name VARCHAR(150),
+  shop_location VARCHAR(200),
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+);
+
+-- Shop Products Table
+CREATE TABLE IF NOT EXISTS shop_products (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  shop_owner_id INT NOT NULL,
+  name VARCHAR(150) NOT NULL,
+  category VARCHAR(100),
+  company VARCHAR(100),
+  price DECIMAL(10,2),
+  stock_quantity INT DEFAULT 0,
+  unit VARCHAR(50),
+  description TEXT,
+  image_url VARCHAR(255),
+  status ENUM('Available', 'Out of Stock', 'Low Stock') DEFAULT 'Available',
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (shop_owner_id) REFERENCES users(id) ON DELETE CASCADE
 );
 
 -- Scans Table

@@ -11,7 +11,7 @@ const generateOTP = () => Math.floor(100000 + Math.random() * 900000).toString()
 // POST /api/auth/register
 router.post('/register', async (req, res) => {
   try {
-    const { full_name, mobile_number, email, password } = req.body;
+    const { full_name, mobile_number, email, password, role, shop_name, shop_location } = req.body;
 
     if (!full_name || !mobile_number || !password) {
       return res.status(400).json({ success: false, message: 'Full name, mobile number and password are required' });
@@ -28,8 +28,8 @@ router.post('/register', async (req, res) => {
 
     // Insert user
     const [result] = await db.query(
-      'INSERT INTO users (full_name, mobile_number, email, password) VALUES (?, ?, ?, ?)',
-      [full_name, mobile_number, email || null, hashedPassword]
+      'INSERT INTO users (full_name, mobile_number, email, password, role, shop_name, shop_location) VALUES (?, ?, ?, ?, ?, ?, ?)',
+      [full_name, mobile_number, email || null, hashedPassword, role || 'user', shop_name || null, shop_location || null]
     );
 
     // Generate JWT
@@ -41,7 +41,7 @@ router.post('/register', async (req, res) => {
 
     // Fetch created user (without password)
     const [users] = await db.query(
-      'SELECT id, full_name, mobile_number, email, is_verified, created_at FROM users WHERE id = ?',
+      'SELECT id, full_name, mobile_number, email, role, shop_name, shop_location, is_verified, created_at FROM users WHERE id = ?',
       [result.insertId]
     );
 
@@ -192,7 +192,7 @@ router.get('/profile', async (req, res) => {
 
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
     const [users] = await db.query(
-      'SELECT id, full_name, mobile_number, email, is_verified, profile_image, location, farm_size, main_crop, soil_type, sowing_date, created_at FROM users WHERE id = ?',
+      'SELECT id, full_name, mobile_number, email, role, shop_name, shop_location, is_verified, profile_image, location, farm_size, main_crop, soil_type, sowing_date, created_at FROM users WHERE id = ?',
       [decoded.userId]
     );
 

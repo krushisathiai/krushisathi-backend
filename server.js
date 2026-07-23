@@ -12,10 +12,24 @@ app.use(express.urlencoded({ extended: true }));
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
 // ─── ROUTES ───────────────────────────────────────────────────────────────────
-app.use('/api/auth', require('./routes/auth'));
-app.use('/api/scans', require('./routes/scans'));
-app.use('/api/diseases', require('./routes/diseases'));
-app.use('/api/alerts', require('./routes/alerts'));
+const authRoutes = require('./routes/auth');
+const scanRoutes = require('./routes/scans');
+const weatherRoutes = require('./routes/weather');
+const diseaseRoutes = require('./routes/diseases');
+const alertRoutes = require('./routes/alerts');
+const guideRoutes = require('./routes/guides');
+const statsRoutes = require('./routes/stats');
+const shopRoutes = require('./routes/shop');
+
+// ─── API ROUTES ───────────────────────────────────────────────────────────────
+app.use('/api/auth', authRoutes);
+app.use('/api/scans', scanRoutes);
+app.use('/api/weather', weatherRoutes);
+app.use('/api/diseases', diseaseRoutes);
+app.use('/api/alerts', alertRoutes);
+app.use('/api/guides', guideRoutes);
+app.use('/api/stats', statsRoutes);
+app.use('/api/shop', shopRoutes);
 app.use('/api/fertilizers', require('./routes/fertilizers'));
 app.use('/api/expert', require('./routes/expert'));
 app.use('/api/urea', require('./routes/urea'));
