@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const db = require('../db');
-const { requireAuth } = require('../middleware/auth'); // assuming standard auth middleware exists
+const { authMiddleware } = require('../middleware/auth');
 
 // ─── MIDDLEWARE FOR SHOP OWNER ONLY ─────────────────────────────────────────
 const requireShopOwner = async (req, res, next) => {
@@ -18,7 +18,7 @@ const requireShopOwner = async (req, res, next) => {
 
 // ─── GET SHOP PRODUCTS (FOR OWNER) ──────────────────────────────────────────
 // GET /api/shop/my-products
-router.get('/my-products', requireAuth, requireShopOwner, async (req, res) => {
+router.get('/my-products', authMiddleware, requireShopOwner, async (req, res) => {
   try {
     const [products] = await db.query(
       'SELECT * FROM shop_products WHERE shop_owner_id = ? ORDER BY created_at DESC',
@@ -33,7 +33,7 @@ router.get('/my-products', requireAuth, requireShopOwner, async (req, res) => {
 
 // ─── GET DASHBOARD STATS (FOR OWNER) ──────────────────────────────────────────
 // GET /api/shop/stats
-router.get('/stats', requireAuth, requireShopOwner, async (req, res) => {
+router.get('/stats', authMiddleware, requireShopOwner, async (req, res) => {
   try {
     const [[totalProductsRow]] = await db.query('SELECT COUNT(*) as count FROM shop_products WHERE shop_owner_id = ?', [req.user.userId]);
     const [[outOfStockRow]] = await db.query('SELECT COUNT(*) as count FROM shop_products WHERE shop_owner_id = ? AND status = ?', [req.user.userId, 'Out of Stock']);
@@ -60,7 +60,7 @@ router.get('/stats', requireAuth, requireShopOwner, async (req, res) => {
 
 // ─── ADD PRODUCT (FOR OWNER) ────────────────────────────────────────────────
 // POST /api/shop/products
-router.post('/products', requireAuth, requireShopOwner, async (req, res) => {
+router.post('/products', authMiddleware, requireShopOwner, async (req, res) => {
   try {
     const { name, category, company, price, stock_quantity, unit, description, status } = req.body;
     
@@ -84,7 +84,7 @@ router.post('/products', requireAuth, requireShopOwner, async (req, res) => {
 
 // ─── DELETE PRODUCT (FOR OWNER) ─────────────────────────────────────────────
 // DELETE /api/shop/products/:id
-router.delete('/products/:id', requireAuth, requireShopOwner, async (req, res) => {
+router.delete('/products/:id', authMiddleware, requireShopOwner, async (req, res) => {
   try {
     const [result] = await db.query(
       'DELETE FROM shop_products WHERE id = ? AND shop_owner_id = ?',
@@ -105,7 +105,7 @@ router.delete('/products/:id', requireAuth, requireShopOwner, async (req, res) =
 // ─── GET ALL PRODUCTS (FOR ALL USERS) ───────────────────────────────────────
 // GET /api/shop/all-products
 // This is for normal users to browse products and see shop owner info
-router.get('/all-products', requireAuth, async (req, res) => {
+router.get('/all-products', authMiddleware, async (req, res) => {
   try {
     const query = `
       SELECT p.*, u.shop_name, u.shop_location, u.mobile_number 
