@@ -72,9 +72,9 @@ router.get('/dashboard', adminMiddleware, async (req, res) => {
 
     // Monthly scan count (last 6 months)
     const [monthlyScanData] = await db.query(
-      `SELECT DATE_FORMAT(scanned_at, '%Y-%m') as month, COUNT(*) as count
+      `SELECT TO_CHAR(scanned_at, 'YYYY-MM') as month, COUNT(*) as count
        FROM scans
-       WHERE scanned_at >= DATE_SUB(NOW(), INTERVAL 6 MONTH)
+       WHERE scanned_at >= NOW() - INTERVAL '6 months'
        GROUP BY month ORDER BY month ASC`
     );
 
