@@ -104,6 +104,22 @@ router.post('/products', authMiddleware, requireShopOwner, upload.single('image'
       [req.user.userId, name, category, company, price, stock_quantity || 0, unit, description, imageUrl, status || 'Available']
     );
 
+    // Generate Global Alert
+    try {
+      const [shopUser] = await db.query('SELECT shop_name FROM users WHERE id = ?', [req.user.userId]);
+      const shopName = (shopUser.length > 0 && shopUser[0].shop_name) ? shopUser[0].shop_name : 'A Shop';
+      
+      const alertTitle = 'New Product Available! 🎉';
+      const alertMessage = `${shopName} has added a new product: ${name}. Check it out now in the Marketplace!`;
+      
+      await db.query(
+        `INSERT INTO alerts (user_id, title, message, type) VALUES (NULL, ?, ?, 'shop')`,
+        [alertTitle, alertMessage]
+      );
+    } catch (alertErr) {
+      console.error('Failed to create global alert for new product:', alertErr);
+    }
+
     res.status(201).json({ success: true, message: 'Product added successfully', productId: result.insertId });
   } catch (err) {
     console.error('Error adding product:', err);
