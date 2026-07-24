@@ -207,6 +207,67 @@ router.get('/profile', async (req, res) => {
   }
 });
 
+// ─── UPDATE PROFILE ───────────────────────────────────────────────────────────
+// PUT /api/auth/profile (protected)
+router.put('/profile', async (req, res) => {
+  try {
+    const token = req.headers.authorization?.split(' ')[1];
+    if (!token) return res.status(401).json({ success: false, message: 'No token provided' });
+    
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    
+    const { full_name, mobile_number, email, shop_name, shop_location } = req.body;
+    
+    await db.query(
+      'UPDATE users SET full_name = ?, mobile_number = ?, email = ?, shop_name = ?, shop_location = ? WHERE id = ?',
+      [full_name, mobile_number, email || null, shop_name || null, shop_location || null, decoded.userId]
+    );
+
+    res.json({ success: true, message: 'Profile updated successfully' });
+  } catch (err) {
+    if (err.name === 'JsonWebTokenError') {
+      return res.status(401).json({ success: false, message: 'Invalid token' });
+    }
+    console.error('Update profile error:', err);
+    res.status(500).json({ success: false, message: 'Server error' });
+  }
+});
+
+// ─── CHANGE PASSWORD ──────────────────────────────────────────────────────────
+// PUT /api/auth/change-password (protected)
+router.put('/change-password', async (req, res) => {
+  try {
+    const token = req.headers.authorization?.split(' ')[1];
+    if (!token) return res.status(401).json({ success: false, message: 'No token provided' });
+    
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    const { old_password, new_password } = req.body;
+
+    if (!old_password || !new_password) {
+      return res.status(400).json({ success: false, message: 'Both old and new passwords are required' });
+    }
+
+    const [users] = await db.query('SELECT password FROM users WHERE id = ?', [decoded.userId]);
+    if (users.length === 0) return res.status(404).json({ success: false, message: 'User not found' });
+
+    const isMatch = await bcrypt.compare(old_password, users[0].password);
+    if (!isMatch) {
+      return res.status(401).json({ success: false, message: 'Incorrect old password' });
+    }
+
+    const hashedPassword = await bcrypt.hash(new_password, 12);
+    await db.query('UPDATE users SET password = ? WHERE id = ?', [hashedPassword, decoded.userId]);
+
+    res.json({ success: true, message: 'Password changed successfully' });
+  } catch (err) {
+    if (err.name === 'JsonWebTokenError') {
+      return res.status(401).json({ success: false, message: 'Invalid token' });
+    }
+    console.error('Change password error:', err);
+    res.status(500).json({ success: false, message: 'Server error' });
+  }
+});
+
 // ─── DELETE ACCOUNT ──────────────────────────────────────────────────────────
 // DELETE /api/auth/delete (protected)
 router.delete('/delete', async (req, res) => {
