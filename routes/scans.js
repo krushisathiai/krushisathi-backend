@@ -60,7 +60,7 @@ router.post('/', authMiddleware, upload.single('crop_image'), async (req, res) =
       }
 
       const genAI = new GoogleGenerativeAI(apiKey);
-      const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+      const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
 
       let langInstruction = 'English';
       if (language === 'mr') langInstruction = 'Marathi';
@@ -89,7 +89,12 @@ router.post('/', authMiddleware, upload.single('crop_image'), async (req, res) =
 
       const imagePart = fileToGenerativePart(req.file.path, req.file.mimetype);
       const result = await model.generateContent([prompt, imagePart]);
-      const text = result.response.text().replace(/```json/g, '').replace(/```/g, '').trim();
+      let text = result.response.text().replace(/```json/g, '').replace(/```/g, '').trim();
+      // Extract just the JSON block in case Gemini adds conversational text
+      const jsonMatch = text.match(/\{[\s\S]*\}/);
+      if (jsonMatch) {
+        text = jsonMatch[0];
+      }
       const jsonResponse = JSON.parse(text);
 
       if (jsonResponse.error) {
