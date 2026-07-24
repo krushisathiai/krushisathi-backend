@@ -62,6 +62,7 @@ router.get('/stats', authMiddleware, requireShopOwner, async (req, res) => {
     const [[totalProductsRow]] = await db.query('SELECT COUNT(*) as count FROM shop_products WHERE shop_owner_id = ?', [req.user.userId]);
     const [[outOfStockRow]] = await db.query('SELECT COUNT(*) as count FROM shop_products WHERE shop_owner_id = ? AND status = ?', [req.user.userId, 'Out of Stock']);
     const [[availableStockRow]] = await db.query('SELECT COUNT(*) as count FROM shop_products WHERE shop_owner_id = ? AND status != ?', [req.user.userId, 'Out of Stock']);
+    const [[totalInquiriesRow]] = await db.query('SELECT COUNT(*) as count FROM shop_inquiries WHERE shop_owner_id = ?', [req.user.userId]);
     
     // Low stock products
     const [lowStockProducts] = await db.query('SELECT id, name, stock_quantity, unit FROM shop_products WHERE shop_owner_id = ? AND stock_quantity <= 10', [req.user.userId]);
@@ -72,6 +73,7 @@ router.get('/stats', authMiddleware, requireShopOwner, async (req, res) => {
         totalProducts: parseInt(totalProductsRow.count),
         outOfStock: parseInt(outOfStockRow.count),
         availableStock: parseInt(availableStockRow.count),
+        totalInquiries: parseInt(totalInquiriesRow.count),
         lowStockProducts
       }
     });
