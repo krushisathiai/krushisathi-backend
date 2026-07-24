@@ -60,7 +60,7 @@ router.post('/', authMiddleware, upload.single('crop_image'), async (req, res) =
       }
 
       const genAI = new GoogleGenerativeAI(apiKey);
-      const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
+      const model = genAI.getGenerativeModel({ model: "gemini-flash-latest" });
 
       let langInstruction = 'English';
       if (language === 'mr') langInstruction = 'Marathi';
