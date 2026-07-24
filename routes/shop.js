@@ -2,6 +2,34 @@ const express = require('express');
 const router = express.Router();
 const db = require('../db');
 const { authMiddleware } = require('../middleware/auth');
+const multer = require('multer');
+const path = require('path');
+const fs = require('fs');
+
+// ─── MULTER SETUP FOR PRODUCT IMAGES ────────────────────────────────────────
+const storage = multer.diskStorage({
+  destination: (req, file, cb) => {
+    const dir = path.join(__dirname, '../uploads/products');
+    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+    cb(null, dir);
+  },
+  filename: (req, file, cb) => {
+    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1e9);
+    cb(null, `product-${uniqueSuffix}${path.extname(file.originalname)}`);
+  },
+});
+
+const upload = multer({
+  storage,
+  limits: { fileSize: 10 * 1024 * 1024 }, // 10MB
+  fileFilter: (req, file, cb) => {
+    const allowed = /jpeg|jpg|png|webp/;
+    const ext = allowed.test(path.extname(file.originalname).toLowerCase());
+    const mime = allowed.test(file.mimetype);
+    if (ext && mime) return cb(null, true);
+    cb(new Error('Only image files (jpeg, jpg, png, webp) are allowed'));
+  },
+});
 
 // ─── MIDDLEWARE FOR SHOP OWNER ONLY ─────────────────────────────────────────
 const requireShopOwner = async (req, res, next) => {
@@ -60,9 +88,14 @@ router.get('/stats', authMiddleware, requireShopOwner, async (req, res) => {
 
 // ─── ADD PRODUCT (FOR OWNER) ────────────────────────────────────────────────
 // POST /api/shop/products
-router.post('/products', authMiddleware, requireShopOwner, async (req, res) => {
+router.post('/products', authMiddleware, requireShopOwner, upload.single('image'), async (req, res) => {
   try {
     const { name, category, company, price, stock_quantity, unit, description, status } = req.body;
+    let imageUrl = null;
+    
+    if (req.file) {
+      imageUrl = `/uploads/products/${req.file.filename}`;
+    }
     
     if (!name || !price) {
       return res.status(400).json({ success: false, message: 'Product name and price are required' });
@@ -70,9 +103,9 @@ router.post('/products', authMiddleware, requireShopOwner, async (req, res) => {
 
     const [result] = await db.query(
       `INSERT INTO shop_products 
-       (shop_owner_id, name, category, company, price, stock_quantity, unit, description, status) 
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [req.user.userId, name, category, company, price, stock_quantity || 0, unit, description, status || 'Available']
+       (shop_owner_id, name, category, company, price, stock_quantity, unit, description, image_url, status) 
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [req.user.userId, name, category, company, price, stock_quantity || 0, unit, description, imageUrl, status || 'Available']
     );
 
     res.status(201).json({ success: true, message: 'Product added successfully', productId: result.insertId });
