@@ -240,6 +240,15 @@ router.post('/inquire', authMiddleware, async (req, res) => {
     
     const user = users[0];
 
+    const [existing] = await db.query(
+      'SELECT id FROM shop_inquiries WHERE product_id = ? AND user_id = ?',
+      [product_id, req.user.userId]
+    );
+
+    if (existing.length > 0) {
+      return res.status(200).json({ success: true, message: 'Inquiry already sent previously' });
+    }
+
     await db.query(
       `INSERT INTO shop_inquiries 
        (product_id, shop_owner_id, user_id, user_name, user_mobile, user_location) 
