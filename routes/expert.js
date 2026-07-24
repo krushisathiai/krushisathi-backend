@@ -34,10 +34,15 @@ router.post('/', authMiddleware, async (req, res) => {
         if (language === 'hi') langInstruction = 'Hindi';
 
         const prompt = `
-          You are an expert agricultural consultant named Dr. Patil.
-          A farmer has asked you the following question: "${question.trim()}"
-          Provide a concise, highly practical, and actionable answer (under 5 sentences).
-          Your response MUST be entirely in ${langInstruction} language.
+          You are an expert agricultural consultant. 
+          Respond strictly in ${langInstruction}. 
+          Answer the user's agricultural question with highly actionable advice.
+          IMPORTANT RULES:
+          1. If suggesting a treatment, MUST include exact product names (pesticides, fertilizers, etc.).
+          2. MUST include exact dosage (e.g., how many ml per liter of water or kg per acre).
+          3. Make key terms and product names BOLD using markdown like **Product Name**.
+          
+          User Question: ${question}
         `;
 
         const aiResult = await model.generateContent(prompt);

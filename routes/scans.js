@@ -77,15 +77,15 @@ router.post('/', authMiddleware, upload.single('crop_image'), async (req, res) =
 
         If it IS a plant, identify the crop name (e.g., Apple, Tomato, Wheat).
         Then detect any diseases or confirm if it is healthy.
-        IMPORTANT: Your response must be in ${langInstruction} language (except for keys).
+        IMPORTANT: Your entire response (except keys) MUST be strictly in ${langInstruction} language.
         Return ONLY a JSON object (without markdown code blocks) with the following exact keys:
         {
           "crop_name": "Name of the crop in ${langInstruction}",
           "disease_name": "Name of the disease (or 'Healthy Plant') in ${langInstruction}",
-          "severity": "Low Risk, Medium Risk, or High Risk (Translate to ${langInstruction} if not English)",
+          "severity": "Low Risk, Medium Risk, or High Risk (Translate to ${langInstruction})",
           "confidence": 95.5,
-          "description": "Detailed explanation of what you see and what the issue is in ${langInstruction}.",
-          "treatment": "Actionable treatment advice or 'None needed' in ${langInstruction}.",
+          "description": "Detailed explanation in ${langInstruction}. IMPORTANT: Make the disease name or main issue BOLD using markdown like **Disease Name**.",
+          "treatment": "Actionable treatment advice in ${langInstruction}. MUST include exact product names (e.g. specific pesticides/fungicides) and exact dosage (e.g. how many ml per liter of water).",
           "fertilizer": "Fertilizer recommendations in ${langInstruction}."
         }
       `;
