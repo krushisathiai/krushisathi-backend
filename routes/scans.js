@@ -27,22 +27,23 @@ const upload = multer({
   },
 });
 
-// Simulated AI disease detection (replace with real ML model call)
-const simulateAIDetection = (imagePath) => {
-  const diseases = [
-    { disease_name: 'Early Blight', crop_name: 'Tomato', severity: 'Medium Risk', confidence: 87.5, description: 'Early blight is a common fungal disease of tomatoes caused by Alternaria solani.', treatment: 'Apply copper-based fungicide every 7-10 days. Remove infected leaves immediately.', fertilizer: 'Reduce nitrogen, increase potassium and phosphorus.' },
-    { disease_name: 'Rust Disease', crop_name: 'Wheat', severity: 'High Risk', confidence: 92.3, description: 'Wheat rust is caused by Puccinia species and spreads rapidly in humid conditions.', treatment: 'Apply triazole fungicides immediately. Remove infected plants.', fertilizer: 'Apply balanced NPK fertilizer. Avoid excessive nitrogen.' },
-    { disease_name: 'Healthy Plant', crop_name: 'General', severity: 'Low Risk', confidence: 95.0, description: 'No disease detected. Your crop appears healthy!', treatment: 'Continue regular care and monitoring.', fertilizer: 'Maintain current fertilization schedule.' },
-    { disease_name: 'Leaf Curl Virus', crop_name: 'Cotton', severity: 'High Risk', confidence: 88.9, description: 'Cotton leaf curl disease is caused by a begomovirus transmitted by whiteflies.', treatment: 'Remove and destroy infected plants. Control whitefly population with insecticides.', fertilizer: 'Apply potassium-rich fertilizer to boost plant immunity.' },
-  ];
-  return diseases[Math.floor(Math.random() * diseases.length)];
-};
+const { GoogleGenerativeAI } = require('@google/generative-ai');
+
+// Helper to convert local file to generative part
+function fileToGenerativePart(filePath, mimeType) {
+  return {
+    inlineData: {
+      data: Buffer.from(fs.readFileSync(filePath)).toString("base64"),
+      mimeType
+    },
+  };
+}
 
 // ─── CREATE SCAN ──────────────────────────────────────────────────────────────
 // POST /api/scans  (protected)
 router.post('/', authMiddleware, upload.single('crop_image'), async (req, res) => {
   try {
-    const { crop_name } = req.body;
+    const { crop_name, language = 'en' } = req.body;
     const userId = req.user.userId;
 
     if (!req.file) {
@@ -50,16 +51,72 @@ router.post('/', authMiddleware, upload.single('crop_image'), async (req, res) =
     }
 
     const imageUrl = `/uploads/scans/${req.file.filename}`;
+    let aiResult;
 
-    // Simulate AI detection
-    const aiResult = simulateAIDetection(req.file.path);
+    try {
+      const apiKey = process.env.GEMINI_API_KEY;
+      if (!apiKey) {
+        throw new Error("GEMINI_API_KEY is missing.");
+      }
+
+      const genAI = new GoogleGenerativeAI(apiKey);
+      const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+
+      let langInstruction = 'English';
+      if (language === 'mr') langInstruction = 'Marathi';
+      if (language === 'hi') langInstruction = 'Hindi';
+
+      const prompt = `
+        You are an expert agricultural botanist and plant pathologist. 
+        Analyze this image of a plant/crop. 
+        If it is NOT a plant or crop (e.g. a person, car, dog, object, keyboard, etc.), respond EXACTLY with ONLY:
+        {"error": "Not a plant"}
+
+        If it IS a plant, identify the crop name (e.g., Apple, Tomato, Wheat).
+        Then detect any diseases or confirm if it is healthy.
+        IMPORTANT: Your response must be in ${langInstruction} language (except for keys).
+        Return ONLY a JSON object (without markdown code blocks) with the following exact keys:
+        {
+          "crop_name": "Name of the crop in ${langInstruction}",
+          "disease_name": "Name of the disease (or 'Healthy Plant') in ${langInstruction}",
+          "severity": "Low Risk, Medium Risk, or High Risk (Translate to ${langInstruction} if not English)",
+          "confidence": 95.5,
+          "description": "Detailed explanation of what you see and what the issue is in ${langInstruction}.",
+          "treatment": "Actionable treatment advice or 'None needed' in ${langInstruction}.",
+          "fertilizer": "Fertilizer recommendations in ${langInstruction}."
+        }
+      `;
+
+      const imagePart = fileToGenerativePart(req.file.path, req.file.mimetype);
+      const result = await model.generateContent([prompt, imagePart]);
+      const text = result.response.text().replace(/```json/g, '').replace(/```/g, '').trim();
+      const jsonResponse = JSON.parse(text);
+
+      if (jsonResponse.error) {
+        return res.status(400).json({ success: false, message: 'Uploaded image does not appear to be a crop or plant. Please upload a clear photo of the crop leaf.' });
+      }
+
+      aiResult = jsonResponse;
+    } catch (e) {
+      console.error("Gemini AI Error (falling back to mock):", e);
+      // Fallback mock if API key is missing or quota exceeded
+      aiResult = { 
+        crop_name: 'Unknown Crop', 
+        disease_name: 'Unknown Issue (AI Error)', 
+        severity: 'Medium Risk', 
+        confidence: 50.0, 
+        description: 'We could not process this image through AI at the moment. ' + (e.message || ''), 
+        treatment: 'Please consult a local expert.', 
+        fertilizer: 'Maintain standard fertilization.' 
+      };
+    }
 
     const [result] = await db.query(
       `INSERT INTO scans (user_id, crop_name, disease_name, disease_description, severity, image_url, treatment_advice, fertilizer_advice, confidence_score)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         userId,
-        crop_name || aiResult.crop_name,
+        aiResult.crop_name,
         aiResult.disease_name,
         aiResult.description,
         aiResult.severity,

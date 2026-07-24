@@ -7,7 +7,7 @@ const { authMiddleware } = require('../middleware/auth');
 // POST /api/expert (protected)
 router.post('/', authMiddleware, async (req, res) => {
   try {
-    const { question } = req.body;
+    const { question, language = 'en' } = req.body;
     const userId = req.user.userId;
 
     if (!question || question.trim().length === 0) {
@@ -19,19 +19,42 @@ router.post('/', authMiddleware, async (req, res) => {
       [userId, question.trim()]
     );
 
-    // Auto-generate a mock answer (replace with real expert system in production)
-    const mockAnswers = [
-      'Apply neem oil spray early morning for best results. Repeat every 7 days.',
-      'Use balanced NPK fertilizer (19:19:19) at 1kg per acre during vegetative stage.',
-      'Ensure proper drainage and avoid overwatering. Fungal infections thrive in wet conditions.',
-      'Contact your local Krishi Vigyan Kendra for soil testing and personalized advice.',
-      'Rotate crops every season to prevent soil-borne diseases and maintain soil health.',
-    ];
-    const answer = mockAnswers[Math.floor(Math.random() * mockAnswers.length)];
+    let answer = 'We could not fetch expert advice at this moment. Please try again later.';
+    let answeredBy = 'System Error';
+
+    try {
+      const apiKey = process.env.GEMINI_API_KEY;
+      if (apiKey) {
+        const { GoogleGenerativeAI } = require('@google/generative-ai');
+        const genAI = new GoogleGenerativeAI(apiKey);
+        const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+
+        let langInstruction = 'English';
+        if (language === 'mr') langInstruction = 'Marathi';
+        if (language === 'hi') langInstruction = 'Hindi';
+
+        const prompt = `
+          You are an expert agricultural consultant named Dr. Patil.
+          A farmer has asked you the following question: "${question.trim()}"
+          Provide a concise, highly practical, and actionable answer (under 5 sentences).
+          Your response MUST be entirely in ${langInstruction} language.
+        `;
+
+        const aiResult = await model.generateContent(prompt);
+        answer = aiResult.response.text().trim();
+        answeredBy = 'Dr. Patil (AI Expert)';
+      } else {
+        // Fallback if no API key
+        answer = 'API key missing. Cannot provide AI advice.';
+        answeredBy = 'System';
+      }
+    } catch (e) {
+      console.error('Expert Gemini Error:', e);
+    }
 
     await db.query(
       'UPDATE expert_questions SET answer = ?, answered_by = ?, answered_at = NOW() WHERE id = ?',
-      [answer, 'Dr. Patil', result.insertId]
+      [answer, answeredBy, result.insertId]
     );
 
     res.status(201).json({

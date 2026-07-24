@@ -34,57 +34,93 @@ app.get('/api/health', (req, res) => {
   res.json({ success: true, message: 'Krushi Sathi AI API is running', timestamp: new Date().toISOString(), version: '1.0.0' });
 });
 
-// ─── WEATHER (Enhanced mock with hourly + 5-day forecast) ─────────────────────
+// ─── WEATHER (Using Open-Meteo API for real data) ───────────────────────────────
 app.get('/api/weather', async (req, res) => {
   try {
-    const { location = 'Sangamner, Maharashtra' } = req.query;
-    const conditions = ['Partly Cloudy', 'Sunny', 'Light Rain', 'Overcast', 'Clear Sky'];
-    const icons = ['partly_cloudy', 'sunny', 'rainy', 'cloudy', 'clear'];
-    const condIdx = Math.floor(Math.random() * conditions.length);
+    // Defaulting to Sangamner coordinates for now as per plan
+    const lat = 19.57;
+    const lon = 74.20;
+    const location = 'Sangamner, Maharashtra';
 
+    // Fetch current weather and forecast from Open-Meteo
+    const weatherUrl = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=temperature_2m,relative_humidity_2m,apparent_temperature,precipitation,weather_code,wind_speed_10m&hourly=temperature_2m,weather_code&daily=weather_code,temperature_2m_max,temperature_2m_min,uv_index_max&timezone=auto`;
+    
+    // We will use dynamic import for node-fetch to avoid require() issues with ESM, or just use native fetch if Node 18+
+    let data;
+    try {
+      const response = await fetch(weatherUrl);
+      data = await response.json();
+    } catch (e) {
+      // If native fetch isn't available or fails, use axios
+      const axios = require('axios');
+      const response = await axios.get(weatherUrl);
+      data = response.data;
+    }
+
+    const current = data.current;
+    
+    // Simple weather code mapper (WMO weather codes)
+    const mapCodeToCondition = (code) => {
+      if (code === 0) return { cond: 'Clear Sky', icon: 'clear' };
+      if (code <= 3) return { cond: 'Partly Cloudy', icon: 'partly_cloudy' };
+      if (code <= 49) return { cond: 'Foggy', icon: 'cloudy' };
+      if (code <= 69) return { cond: 'Rain', icon: 'rainy' };
+      if (code <= 79) return { cond: 'Snow', icon: 'cloudy' };
+      if (code <= 99) return { cond: 'Thunderstorm', icon: 'rainy' };
+      return { cond: 'Sunny', icon: 'sunny' };
+    };
+
+    const currentMap = mapCodeToCondition(current.weather_code);
+
+    // Extract next 5 hours
     const hourlyForecast = [];
-    const hours = ['10 AM', '1 PM', '4 PM', '7 PM', '10 PM'];
-    const hourIcons = ['sunny', 'partly_cloudy', 'sunny', 'cloudy', 'clear'];
-    for (let i = 0; i < 5; i++) {
+    const nowHour = new Date().getHours();
+    for (let i = 1; i <= 5; i++) {
+      let idx = nowHour + i;
+      if (idx >= data.hourly.time.length) break;
+      const timeStr = new Date(data.hourly.time[idx]).toLocaleTimeString('en-US', { hour: 'numeric' });
+      const hMap = mapCodeToCondition(data.hourly.weather_code[idx]);
       hourlyForecast.push({
-        time: hours[i],
-        temp: (28 + Math.random() * 7).toFixed(0),
-        icon: hourIcons[i],
+        time: timeStr,
+        temp: Math.round(data.hourly.temperature_2m[idx]),
+        icon: hMap.icon,
       });
     }
 
-    const days = ['Today', 'Tomorrow'];
-    const dates = [];
-    for (let i = 2; i < 6; i++) {
-      const d = new Date();
-      d.setDate(d.getDate() + i);
-      dates.push(d.toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric', month: 'short' }));
+    // Extract next 5 days
+    const fiveDayForecast = [];
+    for (let i = 1; i <= 5; i++) {
+      if (i >= data.daily.time.length) break;
+      const d = new Date(data.daily.time[i]);
+      let dayName = d.toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric', month: 'short' });
+      if (i === 1) dayName = 'Tomorrow';
+      const dMap = mapCodeToCondition(data.daily.weather_code[i]);
+      fiveDayForecast.push({
+        day: dayName,
+        high: Math.round(data.daily.temperature_2m_max[i]),
+        low: Math.round(data.daily.temperature_2m_min[i]),
+        icon: dMap.icon,
+      });
     }
-    const allDays = [...days, ...dates];
-    const fiveDayForecast = allDays.map((day) => ({
-      day,
-      high: (30 + Math.random() * 5).toFixed(0),
-      low: (20 + Math.random() * 4).toFixed(0),
-      icon: conditions[Math.floor(Math.random() * conditions.length)],
-    }));
 
     res.json({
       success: true,
       weather: {
         location,
-        temperature: (28 + Math.random() * 8).toFixed(1),
-        humidity: (40 + Math.random() * 30).toFixed(0),
-        condition: conditions[condIdx],
-        icon: icons[condIdx],
-        wind_speed: (8 + Math.random() * 15).toFixed(1),
-        feels_like: (26 + Math.random() * 8).toFixed(1),
-        rain_chance: Math.floor(Math.random() * 40),
-        uv_index: Math.floor(Math.random() * 8) + 1,
+        temperature: Math.round(current.temperature_2m),
+        humidity: current.relative_humidity_2m,
+        condition: currentMap.cond,
+        icon: currentMap.icon,
+        wind_speed: current.wind_speed_10m,
+        feels_like: Math.round(current.apparent_temperature),
+        rain_chance: current.precipitation > 0 ? 80 : 10,
+        uv_index: Math.round(data.daily.uv_index_max[0] || 5),
         hourly_forecast: hourlyForecast,
         five_day_forecast: fiveDayForecast,
       },
     });
   } catch (err) {
+    console.error('Weather error:', err);
     res.status(500).json({ success: false, message: 'Failed to fetch weather data' });
   }
 });
