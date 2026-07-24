@@ -206,4 +206,53 @@ router.get('/all-products', authMiddleware, async (req, res) => {
   }
 });
 
+// ─── POST INQUIRY (FOR USER) ────────────────────────────────────────────────
+// POST /api/shop/inquire
+router.post('/inquire', authMiddleware, async (req, res) => {
+  try {
+    const { product_id, shop_owner_id } = req.body;
+    
+    if (!product_id || !shop_owner_id) {
+      return res.status(400).json({ success: false, message: 'Product ID and Shop Owner ID are required' });
+    }
+
+    // Get user details
+    const [users] = await db.query('SELECT full_name, mobile_number, location FROM users WHERE id = ?', [req.user.userId]);
+    if (users.length === 0) return res.status(404).json({ success: false, message: 'User not found' });
+    
+    const user = users[0];
+
+    await db.query(
+      `INSERT INTO shop_inquiries 
+       (product_id, shop_owner_id, user_id, user_name, user_mobile, user_location) 
+       VALUES (?, ?, ?, ?, ?, ?)`,
+      [product_id, shop_owner_id, req.user.userId, user.full_name, user.mobile_number, user.location || 'Unknown']
+    );
+
+    res.status(201).json({ success: true, message: 'Inquiry sent successfully' });
+  } catch (err) {
+    console.error('Error sending inquiry:', err);
+    res.status(500).json({ success: false, message: 'Server error' });
+  }
+});
+
+// ─── GET INQUIRIES (FOR OWNER) ─────────────────────────────────────────────
+// GET /api/shop/inquiries
+router.get('/inquiries', authMiddleware, requireShopOwner, async (req, res) => {
+  try {
+    const query = `
+      SELECT i.*, p.name as product_name, p.image_url as product_image
+      FROM shop_inquiries i
+      JOIN shop_products p ON i.product_id = p.id
+      WHERE i.shop_owner_id = ?
+      ORDER BY i.created_at DESC
+    `;
+    const [inquiries] = await db.query(query, [req.user.userId]);
+    res.json({ success: true, inquiries });
+  } catch (err) {
+    console.error('Error fetching inquiries:', err);
+    res.status(500).json({ success: false, message: 'Server error' });
+  }
+});
+
 module.exports = router;

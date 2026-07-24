@@ -153,6 +153,25 @@ async function migrate() {
     `);
     console.log('Shop products table checked/created.');
 
+    // 9. Create Shop Inquiries Table
+    await db.query(`
+      CREATE TABLE IF NOT EXISTS shop_inquiries (
+        id SERIAL PRIMARY KEY,
+        product_id INT NOT NULL,
+        shop_owner_id INT NOT NULL,
+        user_id INT NOT NULL,
+        user_name VARCHAR(100),
+        user_mobile VARCHAR(15),
+        user_location VARCHAR(150),
+        status VARCHAR(50) DEFAULT 'Pending',
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (product_id) REFERENCES shop_products(id) ON DELETE CASCADE,
+        FOREIGN KEY (shop_owner_id) REFERENCES users(id) ON DELETE CASCADE,
+        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+      )
+    `);
+    console.log('Shop inquiries table checked/created.');
+
     // ─── SEED REFERENCE DATA ───────────────────────────────────────────────────
 
     // Seed Crop Diseases Reference Data
