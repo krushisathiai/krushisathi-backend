@@ -110,6 +110,62 @@ router.post('/products', authMiddleware, requireShopOwner, upload.single('image'
     res.status(500).json({ success: false, message: 'Server error' });
   }
 });
+// ─── EDIT PRODUCT (FOR OWNER) ───────────────────────────────────────────────
+// PUT /api/shop/products/:id
+router.put('/products/:id', authMiddleware, requireShopOwner, upload.single('image'), async (req, res) => {
+  try {
+    const { name, category, company, price, stock_quantity, unit, description, status } = req.body;
+    
+    let updateQuery = 'UPDATE shop_products SET name = ?, category = ?, company = ?, price = ?, stock_quantity = ?, unit = ?, description = ?, status = ?';
+    let params = [name, category, company, price, stock_quantity || 0, unit, description, status || 'Available'];
+
+    if (req.file) {
+      updateQuery += ', image_url = ?';
+      params.push(`/uploads/products/${req.file.filename}`);
+    }
+
+    updateQuery += ' WHERE id = ? AND shop_owner_id = ?';
+    params.push(req.params.id, req.user.userId);
+
+    const [result] = await db.query(updateQuery, params);
+
+    if (result.affectedRows === 0) {
+      return res.status(404).json({ success: false, message: 'Product not found or unauthorized' });
+    }
+
+    res.json({ success: true, message: 'Product updated successfully' });
+  } catch (err) {
+    console.error('Error updating product:', err);
+    res.status(500).json({ success: false, message: 'Server error' });
+  }
+});
+
+// ─── TOGGLE PRODUCT STATUS (FOR OWNER) ──────────────────────────────────────
+// PUT /api/shop/products/:id/status
+router.put('/products/:id/status', authMiddleware, requireShopOwner, async (req, res) => {
+  try {
+    const { status } = req.body;
+    
+    if (!status) {
+      return res.status(400).json({ success: false, message: 'Status is required' });
+    }
+
+    const [result] = await db.query(
+      'UPDATE shop_products SET status = ? WHERE id = ? AND shop_owner_id = ?',
+      [status, req.params.id, req.user.userId]
+    );
+
+    if (result.affectedRows === 0) {
+      return res.status(404).json({ success: false, message: 'Product not found or unauthorized' });
+    }
+
+    res.json({ success: true, message: 'Product status updated successfully' });
+  } catch (err) {
+    console.error('Error updating product status:', err);
+    res.status(500).json({ success: false, message: 'Server error' });
+  }
+});
+
 
 // ─── DELETE PRODUCT (FOR OWNER) ─────────────────────────────────────────────
 // DELETE /api/shop/products/:id
