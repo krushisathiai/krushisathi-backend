@@ -31,6 +31,9 @@ const { GoogleGenerativeAI } = require('@google/generative-ai');
 
 // Helper to convert local file to generative part
 function fileToGenerativePart(filePath, mimeType) {
+  if (!mimeType || mimeType === 'application/octet-stream' || mimeType.indexOf('image/') !== 0) {
+    mimeType = 'image/jpeg'; // Fallback to jpeg if flutter sends octet-stream or invalid type
+  }
   return {
     inlineData: {
       data: Buffer.from(fs.readFileSync(filePath)).toString("base64"),
