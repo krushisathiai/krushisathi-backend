@@ -27,7 +27,17 @@ router.get('/', authMiddleware, async (req, res) => {
 // PUT /api/alerts/:id/read  (protected)
 router.put('/:id/read', authMiddleware, async (req, res) => {
   try {
-    await db.query('UPDATE alerts SET is_read = TRUE WHERE id = ?', [req.params.id]);
+    const userId = req.user.userId;
+    const alertId = parseInt(req.params.id);
+    
+    if (isNaN(alertId)) {
+      return res.status(400).json({ success: false, message: 'Invalid alert ID' });
+    }
+
+    await db.query(
+      'UPDATE alerts SET is_read = TRUE WHERE id = ? AND (user_id = ? OR user_id IS NULL)',
+      [alertId, userId]
+    );
     res.json({ success: true, message: 'Alert marked as read' });
   } catch (err) {
     res.status(500).json({ success: false, message: 'Server error' });
