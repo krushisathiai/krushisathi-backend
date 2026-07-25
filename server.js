@@ -8,6 +8,9 @@ const rateLimit = require('express-rate-limit');
 
 const app = express();
 
+// Trust proxy for Render / Cloudflare / Nginx load balancers
+app.set('trust proxy', 1);
+
 // Disable x-powered-by header for security (hide Express identity)
 app.disable('x-powered-by');
 
