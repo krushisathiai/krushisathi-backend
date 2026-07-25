@@ -65,7 +65,9 @@ async function getRecommendedProducts(diseaseName = '', cropName = '', treatment
         SELECT p.*, u.shop_name, u.shop_location, u.mobile_number 
         FROM shop_products p
         JOIN users u ON p.shop_owner_id = u.id
-        WHERE (${categoryFilter}) AND (p.status IS NULL OR p.status = 'Available')
+        WHERE (${categoryFilter}) 
+          AND (p.status IS NULL OR p.status = 'Available')
+          AND p.name NOT ILIKE '%urea%' AND p.name NOT ILIKE '%युरिया%'
         ORDER BY p.created_at DESC
         LIMIT 4
       `;
@@ -73,13 +75,14 @@ async function getRecommendedProducts(diseaseName = '', cropName = '', treatment
       products = matched;
     }
 
-    // Fallback: If fewer than 2 products matched, return available shop products (prioritizing fungicides/pesticides over urea)
+    // Fallback: If fewer than 2 products matched, return available shop products (excluding Urea)
     if (!products || products.length < 2) {
       const fallbackQuery = `
         SELECT p.*, u.shop_name, u.shop_location, u.mobile_number 
         FROM shop_products p
         JOIN users u ON p.shop_owner_id = u.id
         WHERE (p.status IS NULL OR p.status = 'Available')
+          AND p.name NOT ILIKE '%urea%' AND p.name NOT ILIKE '%युरिया%'
         ORDER BY CASE 
           WHEN p.category ILIKE '%pesticide%' OR p.category ILIKE '%fungicide%' THEN 1 
           WHEN p.name ILIKE '%npk%' OR p.name ILIKE '%neem%' THEN 2
