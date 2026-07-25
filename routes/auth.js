@@ -3,6 +3,7 @@ const router = express.Router();
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const db = require('../db');
+const { authMiddleware } = require('../middleware/auth');
 
 // Helper to generate OTP
 const generateOTP = () => Math.floor(100000 + Math.random() * 900000).toString();
@@ -17,26 +18,33 @@ router.post('/register', async (req, res) => {
       return res.status(400).json({ success: false, message: 'Full name, mobile number and password are required' });
     }
 
+    const cleanMobile = String(mobile_number).trim();
+    const cleanName = String(full_name).trim();
+
+    if (cleanMobile.length < 9 || cleanMobile.length > 15) {
+      return res.status(400).json({ success: false, message: 'Invalid mobile number' });
+    }
+
     // Check if user already exists
-    const [existing] = await db.query('SELECT id FROM users WHERE mobile_number = ?', [mobile_number]);
-    if (existing.length > 0) {
+    const [existing] = await db.query('SELECT id FROM users WHERE mobile_number = ?', [cleanMobile]);
+    if (existing && existing.length > 0) {
       return res.status(409).json({ success: false, message: 'Mobile number already registered' });
     }
 
-    // Hash password
+    // Hash password with strong salt round
     const hashedPassword = await bcrypt.hash(password, 12);
 
     // Insert user
     const [result] = await db.query(
       'INSERT INTO users (full_name, mobile_number, email, password, role, shop_name, shop_location) VALUES (?, ?, ?, ?, ?, ?, ?)',
-      [full_name, mobile_number, email || null, hashedPassword, role || 'user', shop_name || null, shop_location || null]
+      [cleanName, cleanMobile, email ? email.trim() : null, hashedPassword, role || 'user', shop_name ? shop_name.trim() : null, shop_location ? shop_location.trim() : null]
     );
 
     // Generate JWT
     const token = jwt.sign(
-      { userId: result.insertId, mobile_number },
-      process.env.JWT_SECRET,
-      { expiresIn: process.env.JWT_EXPIRES_IN }
+      { userId: result.insertId, mobile_number: cleanMobile },
+      process.env.JWT_SECRET || 'royal_shetkari_super_secret_key_2024',
+      { expiresIn: process.env.JWT_EXPIRES_IN || '7d' }
     );
 
     // Fetch created user (without password)
@@ -67,10 +75,12 @@ router.post('/login', async (req, res) => {
       return res.status(400).json({ success: false, message: 'Mobile number and password are required' });
     }
 
+    const cleanInput = String(mobile_number).trim();
+
     // Find user by mobile or email
-    const [users] = await db.query('SELECT * FROM users WHERE mobile_number = ? OR email = ?', [mobile_number, mobile_number]);
-    if (users.length === 0) {
-      return res.status(401).json({ success: false, message: 'Invalid credentials' });
+    const [users] = await db.query('SELECT * FROM users WHERE mobile_number = ? OR email = ?', [cleanInput, cleanInput]);
+    if (!users || users.length === 0) {
+      return res.status(401).json({ success: false, message: 'Invalid mobile number or password' });
     }
 
     const user = users[0];
@@ -84,8 +94,8 @@ router.post('/login', async (req, res) => {
     // Generate JWT
     const token = jwt.sign(
       { userId: user.id, mobile_number: user.mobile_number },
-      process.env.JWT_SECRET,
-      { expiresIn: process.env.JWT_EXPIRES_IN }
+      process.env.JWT_SECRET || 'royal_shetkari_super_secret_key_2024',
+      { expiresIn: process.env.JWT_EXPIRES_IN || '7d' }
     );
 
     // Return user without password
@@ -113,8 +123,9 @@ router.post('/forgot-password', async (req, res) => {
       return res.status(400).json({ success: false, message: 'Mobile number is required' });
     }
 
-    const [users] = await db.query('SELECT id, full_name FROM users WHERE mobile_number = ?', [mobile_number]);
-    if (users.length === 0) {
+    const cleanMobile = String(mobile_number).trim();
+    const [users] = await db.query('SELECT id, full_name FROM users WHERE mobile_number = ?', [cleanMobile]);
+    if (!users || users.length === 0) {
       return res.status(404).json({ success: false, message: 'No account found with this mobile number' });
     }
 
@@ -123,18 +134,22 @@ router.post('/forgot-password', async (req, res) => {
 
     await db.query(
       'UPDATE users SET otp = ?, otp_expires_at = ? WHERE mobile_number = ?',
-      [otp, otpExpiry, mobile_number]
+      [otp, otpExpiry, cleanMobile]
     );
 
-    // In production, send OTP via SMS. For now, return it in response (dev mode)
-    console.log(`OTP for ${mobile_number}: ${otp}`);
+    console.log(`OTP generated for ${cleanMobile}: ${otp}`);
 
-    res.json({
+    const response = {
       success: true,
       message: 'OTP sent successfully to your mobile number',
-      // Remove this in production:
-      dev_otp: otp,
-    });
+    };
+
+    // Return OTP only in non-production environments
+    if (process.env.NODE_ENV !== 'production') {
+      response.dev_otp = otp;
+    }
+
+    res.json(response);
   } catch (err) {
     console.error('Forgot password error:', err);
     res.status(500).json({ success: false, message: 'Server error. Please try again.' });
@@ -151,18 +166,20 @@ router.post('/reset-password', async (req, res) => {
       return res.status(400).json({ success: false, message: 'All fields are required' });
     }
 
+    const cleanMobile = String(mobile_number).trim();
+
     const [users] = await db.query(
       'SELECT id, otp, otp_expires_at FROM users WHERE mobile_number = ?',
-      [mobile_number]
+      [cleanMobile]
     );
 
-    if (users.length === 0) {
+    if (!users || users.length === 0) {
       return res.status(404).json({ success: false, message: 'User not found' });
     }
 
     const user = users[0];
 
-    if (user.otp !== otp) {
+    if (String(user.otp).trim() !== String(otp).trim()) {
       return res.status(400).json({ success: false, message: 'Invalid OTP' });
     }
 
@@ -173,7 +190,7 @@ router.post('/reset-password', async (req, res) => {
     const hashedPassword = await bcrypt.hash(new_password, 12);
     await db.query(
       'UPDATE users SET password = ?, otp = NULL, otp_expires_at = NULL WHERE mobile_number = ?',
-      [hashedPassword, mobile_number]
+      [hashedPassword, cleanMobile]
     );
 
     res.json({ success: true, message: 'Password reset successfully. Please login with your new password.' });
@@ -185,49 +202,46 @@ router.post('/reset-password', async (req, res) => {
 
 // ─── GET PROFILE ──────────────────────────────────────────────────────────────
 // GET /api/auth/profile (protected)
-router.get('/profile', async (req, res) => {
+router.get('/profile', authMiddleware, async (req, res) => {
   try {
-    const token = req.headers.authorization?.split(' ')[1];
-    if (!token) return res.status(401).json({ success: false, message: 'No token provided' });
-
-    const decoded = jwt.verify(token, process.env.JWT_SECRET);
     const [users] = await db.query(
       'SELECT id, full_name, mobile_number, email, role, shop_name, shop_location, is_verified, profile_image, location, farm_size, main_crop, soil_type, sowing_date, created_at FROM users WHERE id = ?',
-      [decoded.userId]
+      [req.user.userId]
     );
 
-    if (users.length === 0) return res.status(404).json({ success: false, message: 'User not found' });
+    if (!users || users.length === 0) return res.status(404).json({ success: false, message: 'User not found' });
 
     res.json({ success: true, user: users[0] });
   } catch (err) {
-    if (err.name === 'JsonWebTokenError') {
-      return res.status(401).json({ success: false, message: 'Invalid token' });
-    }
+    console.error('Profile error:', err);
     res.status(500).json({ success: false, message: 'Server error' });
   }
 });
 
 // ─── UPDATE PROFILE ───────────────────────────────────────────────────────────
 // PUT /api/auth/profile (protected)
-router.put('/profile', async (req, res) => {
+router.put('/profile', authMiddleware, async (req, res) => {
   try {
-    const token = req.headers.authorization?.split(' ')[1];
-    if (!token) return res.status(401).json({ success: false, message: 'No token provided' });
-    
-    const decoded = jwt.verify(token, process.env.JWT_SECRET);
-    
-    const { full_name, mobile_number, email, shop_name, shop_location } = req.body;
+    const { full_name, mobile_number, email, shop_name, shop_location, location, farm_size, main_crop, soil_type } = req.body;
     
     await db.query(
-      'UPDATE users SET full_name = ?, mobile_number = ?, email = ?, shop_name = ?, shop_location = ? WHERE id = ?',
-      [full_name, mobile_number, email || null, shop_name || null, shop_location || null, decoded.userId]
+      'UPDATE users SET full_name = ?, mobile_number = ?, email = ?, shop_name = ?, shop_location = ?, location = ?, farm_size = ?, main_crop = ?, soil_type = ? WHERE id = ?',
+      [
+        full_name ? full_name.trim() : null,
+        mobile_number ? mobile_number.trim() : null,
+        email ? email.trim() : null,
+        shop_name ? shop_name.trim() : null,
+        shop_location ? shop_location.trim() : null,
+        location ? location.trim() : null,
+        farm_size ? farm_size.trim() : null,
+        main_crop ? main_crop.trim() : null,
+        soil_type ? soil_type.trim() : null,
+        req.user.userId
+      ]
     );
 
     res.json({ success: true, message: 'Profile updated successfully' });
   } catch (err) {
-    if (err.name === 'JsonWebTokenError') {
-      return res.status(401).json({ success: false, message: 'Invalid token' });
-    }
     console.error('Update profile error:', err);
     res.status(500).json({ success: false, message: 'Server error' });
   }
@@ -235,20 +249,16 @@ router.put('/profile', async (req, res) => {
 
 // ─── CHANGE PASSWORD ──────────────────────────────────────────────────────────
 // PUT /api/auth/change-password (protected)
-router.put('/change-password', async (req, res) => {
+router.put('/change-password', authMiddleware, async (req, res) => {
   try {
-    const token = req.headers.authorization?.split(' ')[1];
-    if (!token) return res.status(401).json({ success: false, message: 'No token provided' });
-    
-    const decoded = jwt.verify(token, process.env.JWT_SECRET);
     const { old_password, new_password } = req.body;
 
     if (!old_password || !new_password) {
       return res.status(400).json({ success: false, message: 'Both old and new passwords are required' });
     }
 
-    const [users] = await db.query('SELECT password FROM users WHERE id = ?', [decoded.userId]);
-    if (users.length === 0) return res.status(404).json({ success: false, message: 'User not found' });
+    const [users] = await db.query('SELECT password FROM users WHERE id = ?', [req.user.userId]);
+    if (!users || users.length === 0) return res.status(404).json({ success: false, message: 'User not found' });
 
     const isMatch = await bcrypt.compare(old_password, users[0].password);
     if (!isMatch) {
@@ -256,13 +266,10 @@ router.put('/change-password', async (req, res) => {
     }
 
     const hashedPassword = await bcrypt.hash(new_password, 12);
-    await db.query('UPDATE users SET password = ? WHERE id = ?', [hashedPassword, decoded.userId]);
+    await db.query('UPDATE users SET password = ? WHERE id = ?', [hashedPassword, req.user.userId]);
 
     res.json({ success: true, message: 'Password changed successfully' });
   } catch (err) {
-    if (err.name === 'JsonWebTokenError') {
-      return res.status(401).json({ success: false, message: 'Invalid token' });
-    }
     console.error('Change password error:', err);
     res.status(500).json({ success: false, message: 'Server error' });
   }
@@ -270,14 +277,9 @@ router.put('/change-password', async (req, res) => {
 
 // ─── DELETE ACCOUNT ──────────────────────────────────────────────────────────
 // DELETE /api/auth/delete (protected)
-router.delete('/delete', async (req, res) => {
+router.delete('/delete', authMiddleware, async (req, res) => {
   try {
-    const token = req.headers.authorization?.split(' ')[1];
-    if (!token) return res.status(401).json({ success: false, message: 'No token provided' });
-
-    const decoded = jwt.verify(token, process.env.JWT_SECRET);
-    
-    const [result] = await db.query('DELETE FROM users WHERE id = ?', [decoded.userId]);
+    const [result] = await db.query('DELETE FROM users WHERE id = ?', [req.user.userId]);
 
     if (result.affectedRows === 0) {
       return res.status(404).json({ success: false, message: 'User not found' });
@@ -285,9 +287,6 @@ router.delete('/delete', async (req, res) => {
 
     res.json({ success: true, message: 'Account deleted successfully' });
   } catch (err) {
-    if (err.name === 'JsonWebTokenError') {
-      return res.status(401).json({ success: false, message: 'Invalid token' });
-    }
     console.error('Delete account error:', err);
     res.status(500).json({ success: false, message: 'Server error' });
   }

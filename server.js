@@ -1,14 +1,52 @@
-require('dotenv').config();
+const path = require('path');
+require('dotenv').config({ path: path.join(__dirname, '.env') });
 const express = require('express');
 const cors = require('cors');
-const path = require('path');
+const helmet = require('helmet');
+const compression = require('compression');
+const rateLimit = require('express-rate-limit');
 
 const app = express();
 
-// ─── MIDDLEWARE ───────────────────────────────────────────────────────────────
+// Disable x-powered-by header for security (hide Express identity)
+app.disable('x-powered-by');
+
+// ─── SECURITY & PERFORMANCE MIDDLEWARE ─────────────────────────────────────────
+// Helmet security headers
+app.use(helmet({
+  crossOriginResourcePolicy: { policy: "cross-origin" }, // Allow serving images/assets
+  contentSecurityPolicy: false, // Avoid blocking frontend cross-origin requests
+}));
+
+// Gzip Compression for fast responses
+app.use(compression());
+
+// Rate Limiter for general API endpoints (300 requests per 15 minutes per IP)
+const generalLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 300,
+  message: { success: false, message: 'Too many requests from this IP, please try again later.' },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+// Stricter Rate Limiter for Auth endpoints (30 login/register requests per 15 minutes per IP)
+const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 30,
+  message: { success: false, message: 'Too many authentication attempts. Please try again after 15 minutes.' },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+app.use('/api/', generalLimiter);
+app.use('/api/auth/login', authLimiter);
+app.use('/api/auth/register', authLimiter);
+
+// CORS configuration
 app.use(cors({ origin: '*', credentials: true }));
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
+app.use(express.json({ limit: '10mb' }));
+app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
 // ─── ROUTES ───────────────────────────────────────────────────────────────────
