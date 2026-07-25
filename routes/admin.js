@@ -387,4 +387,59 @@ router.put('/expert-questions/:id/answer', adminMiddleware, async (req, res) => 
   }
 });
 
+// ─── ADD CROP DISEASE (ADMIN) ──────────────────────────────────────────────────
+// POST /api/admin/diseases
+router.post('/diseases', adminMiddleware, async (req, res) => {
+  try {
+    const { crop_name, disease_name, symptoms, treatment, prevention, severity_level = 'Medium' } = req.body;
+    if (!crop_name || !disease_name) {
+      return res.status(400).json({ success: false, message: 'Crop name and disease name are required' });
+    }
+
+    const [result] = await db.query(
+      'INSERT INTO crop_diseases (crop_name, disease_name, symptoms, treatment, prevention, severity_level) VALUES (?, ?, ?, ?, ?, ?)',
+      [crop_name.trim(), disease_name.trim(), symptoms || '', treatment || '', prevention || '', severity_level]
+    );
+
+    res.status(201).json({
+      success: true,
+      message: 'Disease added successfully',
+      disease_id: result.insertId,
+    });
+  } catch (err) {
+    console.error('Admin add disease error:', err);
+    res.status(500).json({ success: false, message: 'Failed to add disease' });
+  }
+});
+
+// ─── UPDATE CROP DISEASE (ADMIN) ───────────────────────────────────────────────
+// PUT /api/admin/diseases/:id
+router.put('/diseases/:id', adminMiddleware, async (req, res) => {
+  try {
+    const { crop_name, disease_name, symptoms, treatment, prevention, severity_level } = req.body;
+
+    await db.query(
+      'UPDATE crop_diseases SET crop_name=?, disease_name=?, symptoms=?, treatment=?, prevention=?, severity_level=? WHERE id=?',
+      [crop_name, disease_name, symptoms, treatment, prevention, severity_level, req.params.id]
+    );
+
+    res.json({ success: true, message: 'Disease updated successfully' });
+  } catch (err) {
+    console.error('Admin update disease error:', err);
+    res.status(500).json({ success: false, message: 'Failed to update disease' });
+  }
+});
+
+// ─── DELETE CROP DISEASE (ADMIN) ───────────────────────────────────────────────
+// DELETE /api/admin/diseases/:id
+router.delete('/diseases/:id', adminMiddleware, async (req, res) => {
+  try {
+    await db.query('DELETE FROM crop_diseases WHERE id = ?', [req.params.id]);
+    res.json({ success: true, message: 'Disease deleted successfully' });
+  } catch (err) {
+    console.error('Admin delete disease error:', err);
+    res.status(500).json({ success: false, message: 'Failed to delete disease' });
+  }
+});
+
 module.exports = router;

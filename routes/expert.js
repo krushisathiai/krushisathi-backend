@@ -29,22 +29,34 @@ router.post('/', authMiddleware, async (req, res) => {
         const genAI = new GoogleGenerativeAI(apiKey);
 
         let langInstruction = 'English';
-        if (language === 'mr') langInstruction = 'Marathi';
-        if (language === 'hi') langInstruction = 'Hindi';
+        let scriptInstruction = 'strictly in English';
+
+        if (language === 'mr') {
+          langInstruction = 'Marathi (मराठी)';
+          scriptInstruction = 'strictly in Marathi using Devanagari script (मराठी देवनागरी लिपि). All explanations, steps, and advice MUST be written in clear Marathi.';
+        } else if (language === 'hi') {
+          langInstruction = 'Hindi (हिंदी)';
+          scriptInstruction = 'strictly in Hindi using Devanagari script (हिंदी देवनागरी लिपि). All explanations, steps, and advice MUST be written in clear Hindi.';
+        } else {
+          langInstruction = 'English';
+          scriptInstruction = 'strictly in clear, farmer-friendly English.';
+        }
 
         const prompt = `
-          You are Dr. Patil, a senior agricultural scientist and farming consultant. 
-          Respond strictly in ${langInstruction}. 
-          Answer the user's agricultural question with highly practical, step-by-step advice.
-          IMPORTANT FORMATTING RULES:
-          1. If suggesting treatments, MUST include specific product/chemical names (pesticides, fungicides, fertilizers).
-          2. MUST include exact dosage (e.g. 2 ml per liter of water, 50 kg per acre).
-          3. Use clear bullet points and bold product names using **Product Name**.
-          
-          User Question: ${question}
+          You are Dr. Patil, a senior agricultural scientist and expert plant pathologist.
+          Answer the user's agricultural question ${scriptInstruction}.
+
+          CRITICAL RESPONSE RULES:
+          1. HEADING: Start with a bold heading in ${langInstruction} (e.g., **कृषी सल्लागार मार्गदर्शन (Dr. Patil)** or **कृषि विशेषज्ञ सलाह (Dr. Patil)** or **Agricultural Specialist Advice (Dr. Patil)**).
+          2. DIAGNOSIS: Explain the problem/cause in 1-2 clear lines.
+          3. TREATMENT & DOSAGE: Provide specific, actionable remedies with exact chemical/product names and exact dosages (e.g. 2 ml per liter water or 50 kg per acre).
+          4. FORMATTING: Use clean bullet points (•) and bold product/chemical names using **Product Name**.
+          5. SCRIPT & LANGUAGE: Write strictly in ${langInstruction}. Do NOT output in English if Marathi or Hindi was selected!
+
+          Farmer Question: "${question}"
         `;
 
-        const modelsToTry = ["gemini-1.5-flash", "gemini-2.0-flash-exp", "gemini-1.5-pro", "gemini-flash-latest"];
+        const modelsToTry = ["gemini-1.5-flash", "gemini-2.0-flash", "gemini-2.5-flash", "gemini-1.5-pro", "gemini-flash-latest"];
         let lastErr = null;
 
         for (const modelName of modelsToTry) {
@@ -70,8 +82,8 @@ router.post('/', authMiddleware, async (req, res) => {
       if (language === 'mr') {
         answer = `**कृषी सल्लागार मार्गदर्शन (Dr. Patil):**\n` +
                  `• **पिकाची तपासणी:** आपल्या पिकावर दिसणारी लक्षणे तपासून योग्य **बुरशीनाशक (Fungicide)** किंवा **कीटकनाशक (Insecticide)** ची फवारणी करा.\n` +
-                 `• **शिफारस डोस:** २ मि.ली. प्रति लिटर पाण्यात **Mancozeb 75% WP** किंवा **Imidacloprid 17.8% SL** मिसळून सकाळी सलग फवारणी करा.\n` +
-                 `• **खत व्यवस्थापन:** नत्र आणि स्फुरदच्या योग्य प्रमाणासाठी **NPK 19:19:19** विद्राव्य खत १ किलो प्रति एकर वापरा.\n` +
+                 `• **शिफारस डोस:** २ मि.ली. प्रति लिटर पाण्यात **Mancozeb 75% WP** किंवा **Imidacloprid 17.8% SL** मिसळून सकाळी फवारणी करा.\n` +
+                 `• **खत व्यवस्थापन:** पिकाच्या चांगल्या वाढीसाठी **NPK 19:19:19** विद्राव्य खत १ किलो प्रति एकर वापरा.\n` +
                  `• **विशेष टीप:** अधिक माहितीसाठी जवळच्या कृषी सेवा केंद्राशी थेट संपर्क साधा.`;
       } else if (language === 'hi') {
         answer = `**कृषि विशेषज्ञ सलाह (Dr. Patil):**\n` +
@@ -88,14 +100,31 @@ router.post('/', authMiddleware, async (req, res) => {
       }
     }
 
+    let insertId;
+    try {
+      const [result] = await db.query(
+        'INSERT INTO expert_questions (user_id, question, language) VALUES (?, ?, ?)',
+        [userId, question.trim(), language]
+      );
+      insertId = result.insertId;
+    } catch (dbErr) {
+      const [result] = await db.query(
+        'INSERT INTO expert_questions (user_id, question) VALUES (?, ?)',
+        [userId, question.trim()]
+      );
+      insertId = result.insertId;
+    }
+
     await db.query(
       'UPDATE expert_questions SET answer = ?, answered_by = ?, answered_at = NOW() WHERE id = ?',
-      [answer, answeredBy, result.insertId]
+      [answer, answeredBy, insertId]
     );
 
     res.status(201).json({
       success: true,
-      message: 'Question submitted successfully! Expert will respond shortly.',
+      message: language === 'mr' 
+        ? 'तुमचा प्रश्न सबमिट झाला आहे! डॉ. पाटलांचे उत्तर खाली पहा.' 
+        : (language === 'hi' ? 'आपका प्रश्न सबमिट हो गया है! डॉ. पाटिल का उत्तर नीचे देखें।' : 'Question submitted successfully! Check answer below.'),
     });
   } catch (err) {
     console.error('Expert question error:', err.message);

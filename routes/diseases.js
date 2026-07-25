@@ -33,6 +33,17 @@ router.get('/', async (req, res) => {
   }
 });
 
+// ─── GET DYNAMIC CROPS LIST ───────────────────────────────────────────────────
+// GET /api/diseases/meta/crops
+router.get('/meta/crops', async (req, res) => {
+  try {
+    const [crops] = await db.query('SELECT DISTINCT crop_name FROM crop_diseases ORDER BY crop_name ASC');
+    res.json({ success: true, crops: crops.map(c => c.crop_name) });
+  } catch (err) {
+    res.status(500).json({ success: false, message: 'Server error' });
+  }
+});
+
 // ─── GET SINGLE DISEASE ───────────────────────────────────────────────────────
 // GET /api/diseases/:id
 router.get('/:id', async (req, res) => {

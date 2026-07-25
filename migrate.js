@@ -111,11 +111,17 @@ async function migrate() {
         question TEXT NOT NULL,
         answer TEXT,
         answered_by VARCHAR(100),
+        language VARCHAR(10) DEFAULT 'mr',
         answered_at TIMESTAMP,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
       )
     `);
+    try {
+      await db.query(`ALTER TABLE expert_questions ADD COLUMN language VARCHAR(10) DEFAULT 'mr';`);
+    } catch (e) {
+      // column already exists
+    }
     console.log('Expert questions table checked/created.');
 
     // 7. Create Urea Requests Table
