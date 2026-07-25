@@ -54,4 +54,15 @@ router.get('/meta/crops', async (req, res) => {
   }
 });
 
+// ─── GET SOIL TYPES (for dropdown) ───────────────────────────────────────────
+// GET /api/fertilizers/meta/soils
+router.get('/meta/soils', async (req, res) => {
+  try {
+    const [rows] = await db.query('SELECT DISTINCT soil_type FROM fertilizer_guide WHERE soil_type IS NOT NULL AND soil_type != "" ORDER BY soil_type ASC');
+    res.json({ success: true, soils: rows.map(r => r.soil_type) });
+  } catch (err) {
+    res.status(500).json({ success: false, message: 'Server error' });
+  }
+});
+
 module.exports = router;

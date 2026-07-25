@@ -1,3 +1,5 @@
+const path = require('path');
+require('dotenv').config({ path: path.join(__dirname, '.env') });
 const db = require('./db');
 const bcrypt = require('bcryptjs');
 
@@ -230,20 +232,30 @@ async function migrate() {
       console.log('Seed alerts populated.');
     }
 
-    // Create the test user
-    const testEmail = 'vaibhavsonawane2005@gmail.com';
-    const testPassword = 'Vaibhav@9022';
-    const hashedPw = await bcrypt.hash(testPassword, 10);
-    const [existingTestUser] = await db.query('SELECT id FROM users WHERE email = ?', [testEmail]);
-    if (existingTestUser.length === 0) {
+    // Seed Shop Products
+    const [existingShopProducts] = await db.query('SELECT id FROM shop_products LIMIT 1');
+    if (existingShopProducts.length === 0) {
+      console.log('Seeding shop products...');
+      // Ensure a shop owner user exists
+      const shopOwnerPw = await bcrypt.hash('Shop@123', 10);
+      const [shopUserResult] = await db.query(`
+        INSERT INTO users (full_name, mobile_number, email, password, is_verified, role, shop_name, shop_location)
+        VALUES ('Krushi Agro Center', '9876543210', 'shop@krushisathi.com', ?, true, 'shop_owner', 'Krushi Agro Center', 'Pune, Maharashtra')
+        ON CONFLICT (mobile_number) DO UPDATE SET shop_name = 'Krushi Agro Center'
+        RETURNING id
+      `, [shopOwnerPw]);
+      
+      const shopOwnerId = shopUserResult[0]?.id || 1;
+
       await db.query(`
-        INSERT INTO users (full_name, mobile_number, email, password, is_verified) 
-        VALUES ('Vaibhav Sonawane', '9999999999', ?, ?, true)
-      `, [testEmail, hashedPw]);
-      console.log('Test user created successfully!');
-    } else {
-      await db.query('UPDATE users SET password = ? WHERE email = ?', [hashedPw, testEmail]);
-      console.log('Test user already exists. Password updated.');
+        INSERT INTO shop_products (shop_owner_id, name, category, company, price, stock_quantity, unit, description, image_url, status) VALUES
+        (?, 'Mancozeb 75% WP Fungicide', 'Pesticides', 'Tata Rallis', 350.00, 50, '500g', 'Broad spectrum protective fungicide for leaf spots and blight diseases.', NULL, 'Available'),
+        (?, 'NPK 19:19:19 Water Soluble Fertilizer', 'Fertilizer', 'Mahadhan', 180.00, 100, '1kg', '100% water soluble NPK fertilizer for healthy plant vegetative growth.', NULL, 'Available'),
+        (?, 'Imidacloprid 17.8% SL Insecticide', 'Pesticides', 'Bayer', 280.00, 40, '250ml', 'Systemic insecticide for whitefly, aphids, and thrips control.', NULL, 'Available'),
+        (?, 'Neem Oil Pure Organic Spray', 'Pesticides', 'Organic India', 220.00, 60, '500ml', 'Natural organic pest repellent and fungicide safe for all crops.', NULL, 'Available'),
+        (?, 'Copper Oxychloride 50% WP', 'Pesticides', 'Dhanuka', 420.00, 30, '500g', 'Effective copper fungicide for downy mildew and bacterial blight.', NULL, 'Available')
+      `, [shopOwnerId, shopOwnerId, shopOwnerId, shopOwnerId, shopOwnerId]);
+      console.log('Seed shop products populated.');
     }
 
     console.log('Migration completed successfully.');
