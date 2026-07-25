@@ -169,11 +169,19 @@ app.get('/api/stats', require('./middleware/auth').authMiddleware, async (req, r
   try {
     const userId = req.user.userId;
     const [totalScans] = await db.query('SELECT COUNT(*) as count FROM scans WHERE user_id = ?', [userId]);
-    const [recentScans] = await db.query('SELECT * FROM scans WHERE user_id = ? ORDER BY scanned_at DESC LIMIT 5', [userId]);
-    const [diseaseCount] = await db.query('SELECT COUNT(*) as count FROM scans WHERE user_id = ? AND disease_name != "Healthy Plant"', [userId]);
+    const [recentScans] = await db.query('SELECT * FROM scans WHERE user_id = ? ORDER BY scanned_at DESC LIMIT 3', [userId]);
+    const [diseaseCount] = await db.query("SELECT COUNT(*) as count FROM scans WHERE user_id = ? AND disease_name != 'Healthy Plant'", [userId]);
+    const totalCount = parseInt(totalScans[0]?.count || 0, 10);
+    const diseaseTotal = parseInt(diseaseCount[0]?.count || 0, 10);
+    
     res.json({
       success: true,
-      stats: { total_scans: totalScans[0].count, disease_detected: diseaseCount[0].count, healthy_plants: totalScans[0].count - diseaseCount[0].count, recent_scans: recentScans },
+      stats: { 
+        total_scans: totalCount, 
+        disease_detected: diseaseTotal, 
+        healthy_plants: Math.max(0, totalCount - diseaseTotal), 
+        recent_scans: recentScans || [] 
+      },
     });
   } catch (err) {
     console.error('Stats error:', err.message);
