@@ -215,19 +215,17 @@ async function migrate() {
       console.log('Seed fertilizer guide populated.');
     }
 
-    // Seed Alerts
+    // Seed Dynamic Alerts
+    await db.query(`DELETE FROM alerts WHERE message LIKE '%2025%'`);
     const [existingAlerts] = await db.query('SELECT id FROM alerts LIMIT 1');
     if (existingAlerts.length === 0) {
-      console.log('Seeding default alerts...');
+      console.log('Seeding dynamic alerts...');
       await db.query(`
         INSERT INTO alerts (title, message, type, scheduled_at) VALUES
-        ('Spray Reminder', 'Time to spray for Early Blight\nTomorrow, 7:00 AM', 'spray', NOW() + INTERVAL '1 day'),
-        ('Irrigation Reminder', 'Irrigate your field\nToday, 6:00 PM', 'reminder', NOW()),
-        ('Fertilizer Reminder', 'Apply NPK 19:19:19\n25 May 2025', 'fertilizer', NOW()),
-        ('Weather Alert', 'Rain expected in 2 days\n22 May 2025', 'weather', NOW() + INTERVAL '2 days'),
-        ('Pest Alert', 'Aphids activity high\n23 May 2025', 'disease', NOW()),
-        ('Disease Alert: Tomato Blight Detected', 'High humidity conditions favor Early Blight development. Check your tomato crops.', 'disease', NOW()),
-        ('Weather Alert: Heavy Rain Expected', 'Heavy rainfall predicted in next 48 hours. Ensure proper drainage in fields.', 'weather', NOW())
+        ('Weather Alert 🌤️', 'Mild temperature with high humidity expected. Favorable conditions for healthy crop growth.', 'weather', NOW()),
+        ('Disease Prevention Alert 🌾', 'High humidity conditions favor leaf spot and blight. Monitor your crops regularly.', 'disease', NOW()),
+        ('Fertilizer Recommendation 🧪', 'Foliar application of NPK 19:19:19 recommended during active vegetative stage.', 'fertilizer', NOW()),
+        ('Marketplace Alert 🛍️', 'New fungicides and organic pest repellents available at Krushi Agro Center!', 'shop', NOW())
       `);
       console.log('Seed alerts populated.');
     }
