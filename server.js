@@ -173,13 +173,6 @@ app.get('/api/weather', async (req, res) => {
       console.error('Weather API error:', e);
       return res.status(500).json({ success: false, message: 'Failed to fetch weather data', error: e.toString() });
     }
-        feels_like: Math.round(current.apparent_temperature),
-        rain_chance: current.precipitation > 0 ? 80 : 10,
-        uv_index: Math.round(data.daily.uv_index_max[0] || 5),
-        hourly_forecast: hourlyForecast,
-        five_day_forecast: fiveDayForecast,
-      },
-    });
   } catch (err) {
     console.error('Weather error:', err);
     res.status(500).json({ success: false, message: 'Failed to fetch weather data' });
