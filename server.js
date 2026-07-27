@@ -89,13 +89,23 @@ app.get('/api/weather', async (req, res) => {
     // We will use dynamic import for node-fetch to avoid require() issues with ESM, or just use native fetch if Node 18+
     let data;
     try {
-      const response = await fetch(weatherUrl);
-      data = await response.json();
+      const https = require('https');
+      data = await new Promise((resolve, reject) => {
+        https.get(weatherUrl, { headers: { 'User-Agent': 'KrushiSathiAI/1.0' } }, (resp) => {
+          let raw = '';
+          resp.on('data', (chunk) => raw += chunk);
+          resp.on('end', () => {
+            try {
+              resolve(JSON.parse(raw));
+            } catch(e) {
+              reject(e);
+            }
+          });
+        }).on('error', reject);
+      });
     } catch (e) {
-      // If native fetch isn't available or fails, use axios
-      const axios = require('axios');
-      const response = await axios.get(weatherUrl);
-      data = response.data;
+      console.error('Weather API error:', e);
+      return res.status(500).json({ success: false, message: 'Failed to fetch weather data' });
     }
 
     const current = data.current;
