@@ -86,7 +86,6 @@ app.get('/api/weather', async (req, res) => {
     // Fetch current weather and forecast from Open-Meteo
     const weatherUrl = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=temperature_2m,relative_humidity_2m,apparent_temperature,precipitation,weather_code,wind_speed_10m&hourly=temperature_2m,weather_code&daily=weather_code,temperature_2m_max,temperature_2m_min,uv_index_max&timezone=auto`;
     
-    // We will use dynamic import for node-fetch to avoid require() issues with ESM, or just use native fetch if Node 18+
     let data;
     try {
       const https = require('https');
@@ -103,66 +102,77 @@ app.get('/api/weather', async (req, res) => {
           });
         }).on('error', reject);
       });
+
+      if (!data || data.error || !data.current) {
+        throw new Error(data?.reason || 'Invalid weather data received from API');
+      }
+
+      const current = data.current;
+      
+      // Simple weather code mapper (WMO weather codes)
+      const mapCodeToCondition = (code) => {
+        if (code === 0) return { cond: 'Clear Sky', icon: 'clear' };
+        if (code <= 3) return { cond: 'Partly Cloudy', icon: 'partly_cloudy' };
+        if (code <= 49) return { cond: 'Foggy', icon: 'cloudy' };
+        if (code <= 69) return { cond: 'Rain', icon: 'rainy' };
+        if (code <= 79) return { cond: 'Snow', icon: 'cloudy' };
+        if (code <= 99) return { cond: 'Thunderstorm', icon: 'rainy' };
+        return { cond: 'Sunny', icon: 'sunny' };
+      };
+
+      const currentMap = mapCodeToCondition(current.weather_code);
+
+      // Extract next 5 hours
+      const hourlyForecast = [];
+      const nowHour = new Date().getHours();
+      for (let i = 1; i <= 5; i++) {
+        let idx = nowHour + i;
+        if (idx >= data.hourly.time.length) break;
+        const timeStr = new Date(data.hourly.time[idx]).toLocaleTimeString('en-US', { hour: 'numeric' });
+        const hMap = mapCodeToCondition(data.hourly.weather_code[idx]);
+        hourlyForecast.push({
+          time: timeStr,
+          temp: Math.round(data.hourly.temperature_2m[idx]),
+          icon: hMap.icon,
+        });
+      }
+
+      // Extract next 5 days
+      const fiveDayForecast = [];
+      for (let i = 1; i <= 5; i++) {
+        if (i >= data.daily.time.length) break;
+        const d = new Date(data.daily.time[i]);
+        let dayName = d.toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric', month: 'short' });
+        if (i === 1) dayName = 'Tomorrow';
+        const dMap = mapCodeToCondition(data.daily.weather_code[i]);
+        fiveDayForecast.push({
+          day: dayName,
+          high: Math.round(data.daily.temperature_2m_max[i]),
+          low: Math.round(data.daily.temperature_2m_min[i]),
+          icon: dMap.icon,
+        });
+      }
+
+      res.json({
+        success: true,
+        weather: {
+          location,
+          temperature: Math.round(current.temperature_2m),
+          humidity: current.relative_humidity_2m,
+          condition: currentMap.cond,
+          icon: currentMap.icon,
+          wind_speed: current.wind_speed_10m,
+          feels_like: Math.round(current.apparent_temperature),
+          rain_chance: current.precipitation > 0 ? 80 : 10,
+          uv_index: Math.round(data.daily.uv_index_max[0] || 5),
+          hourly_forecast: hourlyForecast,
+          five_day_forecast: fiveDayForecast,
+        },
+      });
     } catch (e) {
       console.error('Weather API error:', e);
-      return res.status(500).json({ success: false, message: 'Failed to fetch weather data' });
+      return res.status(500).json({ success: false, message: 'Failed to fetch weather data', error: e.toString() });
     }
-
-    const current = data.current;
-    
-    // Simple weather code mapper (WMO weather codes)
-    const mapCodeToCondition = (code) => {
-      if (code === 0) return { cond: 'Clear Sky', icon: 'clear' };
-      if (code <= 3) return { cond: 'Partly Cloudy', icon: 'partly_cloudy' };
-      if (code <= 49) return { cond: 'Foggy', icon: 'cloudy' };
-      if (code <= 69) return { cond: 'Rain', icon: 'rainy' };
-      if (code <= 79) return { cond: 'Snow', icon: 'cloudy' };
-      if (code <= 99) return { cond: 'Thunderstorm', icon: 'rainy' };
-      return { cond: 'Sunny', icon: 'sunny' };
-    };
-
-    const currentMap = mapCodeToCondition(current.weather_code);
-
-    // Extract next 5 hours
-    const hourlyForecast = [];
-    const nowHour = new Date().getHours();
-    for (let i = 1; i <= 5; i++) {
-      let idx = nowHour + i;
-      if (idx >= data.hourly.time.length) break;
-      const timeStr = new Date(data.hourly.time[idx]).toLocaleTimeString('en-US', { hour: 'numeric' });
-      const hMap = mapCodeToCondition(data.hourly.weather_code[idx]);
-      hourlyForecast.push({
-        time: timeStr,
-        temp: Math.round(data.hourly.temperature_2m[idx]),
-        icon: hMap.icon,
-      });
-    }
-
-    // Extract next 5 days
-    const fiveDayForecast = [];
-    for (let i = 1; i <= 5; i++) {
-      if (i >= data.daily.time.length) break;
-      const d = new Date(data.daily.time[i]);
-      let dayName = d.toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric', month: 'short' });
-      if (i === 1) dayName = 'Tomorrow';
-      const dMap = mapCodeToCondition(data.daily.weather_code[i]);
-      fiveDayForecast.push({
-        day: dayName,
-        high: Math.round(data.daily.temperature_2m_max[i]),
-        low: Math.round(data.daily.temperature_2m_min[i]),
-        icon: dMap.icon,
-      });
-    }
-
-    res.json({
-      success: true,
-      weather: {
-        location,
-        temperature: Math.round(current.temperature_2m),
-        humidity: current.relative_humidity_2m,
-        condition: currentMap.cond,
-        icon: currentMap.icon,
-        wind_speed: current.wind_speed_10m,
         feels_like: Math.round(current.apparent_temperature),
         rain_chance: current.precipitation > 0 ? 80 : 10,
         uv_index: Math.round(data.daily.uv_index_max[0] || 5),
