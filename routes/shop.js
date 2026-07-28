@@ -245,13 +245,13 @@ router.get('/stores', authMiddleware, async (req, res) => {
     const landmarks = ['Main Market Yard', 'Bypass Road Junction', 'Station Road', 'Bus Stand Area', 'Highway Naka', 'College Square', 'Ring Road', 'Old City Market'];
     const shopBrands = [
       { name: `${city} Krushi Seva Kendra`, owner: 'Vaibhav Patil', phone: '9822012345', count: 6, rating: 4.9, reviews: 142, dist: '0.8' },
-      { name: `Kisan Agro Center ${city}`, owner: 'Sanjay Deshmukh', phone: '9850123456', count: 5, rating: 4.8, reviews: 118, dist: '1.2' },
-      { name: `Mauli Agro Agency ${city}`, owner: 'Mahesh Shinde', phone: '9763112233', count: 4, rating: 4.7, reviews: 95, dist: '1.9' },
-      { name: `Shri Ganesh Fertilisers & Seeds`, owner: 'Rajesh Jadhav', phone: '9921445566', count: 5, rating: 4.9, reviews: 165, dist: '2.4' },
+      { name: `Kisan Agro Store ${city}`, owner: 'Sanjay Deshmukh', phone: '9850123456', count: 5, rating: 4.8, reviews: 118, dist: '1.2' },
+      { name: `Mauli Krushi Seva Kendra ${city}`, owner: 'Mahesh Shinde', phone: '9763112233', count: 4, rating: 4.7, reviews: 95, dist: '1.9' },
+      { name: `Shri Ganesh Fertilisers & Agro Store`, owner: 'Rajesh Jadhav', phone: '9921445566', count: 5, rating: 4.9, reviews: 165, dist: '2.4' },
       { name: `Shri Ram Krushi Bhandar ${city}`, owner: 'Anand Kulkarni', phone: '9860223344', count: 4, rating: 4.8, reviews: 88, dist: '2.9' },
-      { name: `Mahalaxmi Agro Center ${city}`, owner: 'Pravin Pawar', phone: '9762998877', count: 3, rating: 4.6, reviews: 72, dist: '3.5' },
+      { name: `Mahalaxmi Krushi Seva Kendra ${city}`, owner: 'Pravin Pawar', phone: '9762998877', count: 3, rating: 4.6, reviews: 72, dist: '3.5' },
       { name: `Om Sai Krushi Seva Kendra`, owner: 'Ganesh Thorat', phone: '9922114433', count: 4, rating: 4.9, reviews: 110, dist: '4.1' },
-      { name: `Dhanuka Agro Mart ${city}`, owner: 'Vikas More', phone: '9823556677', count: 3, rating: 4.7, reviews: 64, dist: '4.8' }
+      { name: `Royal Agro Store ${city}`, owner: 'Vikas More', phone: '9823556677', count: 3, rating: 4.7, reviews: 64, dist: '4.8' }
     ];
 
     const fallbackStores = shopBrands.map((b, idx) => ({
