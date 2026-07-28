@@ -302,7 +302,16 @@ router.get('/stores', authMiddleware, async (req, res) => {
       }
     ];
 
-    stores = [...stores, ...fallbackStores];
+    // Deduplicate fallback stores against DB stores by normalized shop name
+    const seenNames = new Set(stores.map(s => (s.shop_name || '').toLowerCase().replace(/[^a-z0-9]/g, '')));
+    for (const fb of fallbackStores) {
+      const normFbName = (fb.shop_name || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+      const isDuplicate = Array.from(seenNames).some(name => name.includes(normFbName) || normFbName.includes(name));
+      if (!isDuplicate) {
+        stores.push(fb);
+        seenNames.add(normFbName);
+      }
+    }
 
     // Sort nearby stores matching user location first
     const parts = userLoc.split(',').map(s => s.trim()).filter(s => s.length > 2);
