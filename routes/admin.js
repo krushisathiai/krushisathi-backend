@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const jwt = require('jsonwebtoken');
+const bcrypt = require('bcryptjs');
 const db = require('../db');
 const { adminMiddleware } = require('../middleware/auth');
 
@@ -17,21 +18,44 @@ router.post('/login', async (req, res) => {
       return res.status(400).json({ success: false, message: 'Email and password are required' });
     }
 
-    if (email !== ADMIN_EMAIL || password !== ADMIN_PASSWORD) {
-      return res.status(401).json({ success: false, message: 'Invalid admin credentials' });
+    const cleanEmail = email.trim().toLowerCase();
+    const cleanPassword = password.trim();
+
+    let isMatch = false;
+    let adminInfo = null;
+
+    // Check env static credentials first
+    if (cleanEmail === ADMIN_EMAIL.trim().toLowerCase() && cleanPassword === ADMIN_PASSWORD) {
+      isMatch = true;
+      adminInfo = { email: cleanEmail, role: 'admin', name: 'Krushi Sathi Admin' };
+    } else {
+      // Check database users table for role = 'admin'
+      const [users] = await db.query('SELECT * FROM users WHERE LOWER(email) = ? AND role = ?', [cleanEmail, 'admin']);
+      if (users.length > 0) {
+        const user = users[0];
+        const validPassword = await bcrypt.compare(cleanPassword, user.password);
+        if (validPassword) {
+          isMatch = true;
+          adminInfo = { id: user.id, email: user.email, role: 'admin', name: user.full_name || 'Admin User' };
+        }
+      }
+    }
+
+    if (!isMatch) {
+      return res.status(401).json({ success: false, message: 'Invalid admin email or password' });
     }
 
     const token = jwt.sign(
-      { email, isAdmin: true, role: 'admin' },
-      process.env.JWT_SECRET,
-      { expiresIn: '1d' }
+      { email: adminInfo.email, isAdmin: true, role: 'admin', id: adminInfo.id },
+      process.env.JWT_SECRET || 'royal_shetkari_super_secret_key_2024',
+      { expiresIn: '7d' }
     );
 
     res.json({
       success: true,
       message: 'Admin login successful',
       token,
-      admin: { email, role: 'admin', name: 'Krushi Sathi Admin' }
+      admin: adminInfo
     });
   } catch (err) {
     console.error('Admin login error:', err);
@@ -439,6 +463,105 @@ router.delete('/diseases/:id', adminMiddleware, async (req, res) => {
   } catch (err) {
     console.error('Admin delete disease error:', err);
     res.status(500).json({ success: false, message: 'Failed to delete disease' });
+  }
+});
+
+// ─── GET UREA REQUESTS (ADMIN) ────────────────────────────────────────────────
+// GET /api/admin/urea-requests
+router.get('/urea-requests', adminMiddleware, async (req, res) => {
+  try {
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 10;
+    const status = req.query.status || '';
+    const offset = (page - 1) * limit;
+
+    let whereClause = '';
+    let params = [];
+    if (status) {
+      whereClause = 'WHERE status = ?';
+      params.push(status);
+    }
+
+    const [requests] = await db.query(
+      `SELECT ur.*, u.email as user_email
+       FROM urea_requests ur LEFT JOIN users u ON ur.user_id = u.id
+       ${whereClause}
+       ORDER BY ur.created_at DESC LIMIT ? OFFSET ?`,
+      [...params, limit, offset]
+    );
+
+    const [total] = await db.query(`SELECT COUNT(*) as count FROM urea_requests ${whereClause}`, params);
+
+    res.json({
+      success: true,
+      requests,
+      pagination: {
+        current_page: page,
+        total_pages: Math.ceil(total[0].count / limit),
+        total_requests: total[0].count,
+        per_page: limit,
+      }
+    });
+  } catch (err) {
+    console.error('Admin get urea requests error:', err);
+    res.status(500).json({ success: false, message: 'Failed to load urea requests' });
+  }
+});
+
+// ─── UPDATE UREA REQUEST STATUS (ADMIN) ────────────────────────────────────────
+// PUT /api/admin/urea-requests/:id/status
+router.put('/urea-requests/:id/status', adminMiddleware, async (req, res) => {
+  try {
+    const { status } = req.body;
+    if (!status) {
+      return res.status(400).json({ success: false, message: 'Status is required' });
+    }
+
+    await db.query('UPDATE urea_requests SET status = ? WHERE id = ?', [status, req.params.id]);
+    res.json({ success: true, message: `Request status updated to ${status}` });
+  } catch (err) {
+    console.error('Admin update urea request error:', err);
+    res.status(500).json({ success: false, message: 'Failed to update request status' });
+  }
+});
+
+// ─── DELETE UREA REQUEST (ADMIN) ──────────────────────────────────────────────
+// DELETE /api/admin/urea-requests/:id
+router.delete('/urea-requests/:id', adminMiddleware, async (req, res) => {
+  try {
+    await db.query('DELETE FROM urea_requests WHERE id = ?', [req.params.id]);
+    res.json({ success: true, message: 'Urea request deleted successfully' });
+  } catch (err) {
+    console.error('Admin delete urea request error:', err);
+    res.status(500).json({ success: false, message: 'Failed to delete request' });
+  }
+});
+
+// ─── GET SHOP PRODUCTS (ADMIN) ────────────────────────────────────────────────
+// GET /api/admin/shop-products
+router.get('/shop-products', adminMiddleware, async (req, res) => {
+  try {
+    const [products] = await db.query(
+      `SELECT sp.*, u.full_name as owner_name, u.shop_name, u.shop_location
+       FROM shop_products sp JOIN users u ON sp.shop_owner_id = u.id
+       ORDER BY sp.created_at DESC`
+    );
+    res.json({ success: true, products });
+  } catch (err) {
+    console.error('Admin get shop products error:', err);
+    res.status(500).json({ success: false, message: 'Failed to fetch shop products' });
+  }
+});
+
+// ─── DELETE SHOP PRODUCT (ADMIN) ──────────────────────────────────────────────
+// DELETE /api/admin/shop-products/:id
+router.delete('/shop-products/:id', adminMiddleware, async (req, res) => {
+  try {
+    await db.query('DELETE FROM shop_products WHERE id = ?', [req.params.id]);
+    res.json({ success: true, message: 'Shop product deleted successfully' });
+  } catch (err) {
+    console.error('Admin delete shop product error:', err);
+    res.status(500).json({ success: false, message: 'Failed to delete product' });
   }
 });
 

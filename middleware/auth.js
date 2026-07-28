@@ -11,7 +11,7 @@ const authMiddleware = (req, res, next) => {
     }
 
     const token = authHeader.split(' ')[1];
-    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    const decoded = jwt.verify(token, process.env.JWT_SECRET || 'royal_shetkari_super_secret_key_2024');
     req.user = decoded;
     next();
   } catch (err) {
@@ -30,7 +30,7 @@ const adminMiddleware = (req, res, next) => {
     }
 
     const token = authHeader.split(' ')[1];
-    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    const decoded = jwt.verify(token, process.env.JWT_SECRET || 'royal_shetkari_super_secret_key_2024');
 
     if (!decoded.isAdmin) {
       return res.status(403).json({ success: false, message: 'Forbidden. Admin access required.' });
