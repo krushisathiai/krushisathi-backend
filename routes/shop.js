@@ -241,122 +241,33 @@ router.get('/stores', authMiddleware, async (req, res) => {
       maps_url: `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent((s.shop_name || 'Krushi Seva Kendra') + ' ' + (s.shop_location || city))}`
     }));
 
-    // Dynamic verified nearby Agro Stores for the user's city
-    const landmarks = ['Bypass Road', 'Market Yard', 'Akole Road', 'Bus Stand Area', 'Highway Junction', 'College Road', 'Station Road', 'Old City Square'];
-    const fallbackStores = [
-      {
-        id: 901,
-        owner_name: 'Vaibhav Patil',
-        mobile_number: '9822012345',
-        shop_name: `Vaibhav Krushi Seva Kendra`,
-        shop_location: `${city}, Maharashtra`,
-        address: `${landmarks[0]}, ${city}, Maharashtra`,
-        product_count: 6,
-        rating: 4.9,
-        reviews_count: 142,
-        distance_km: '0.8',
-        status_text: 'Open Now • 8:00 AM - 8:00 PM',
-        maps_url: `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent('Vaibhav Krushi Seva Kendra ' + city)}`
-      },
-      {
-        id: 902,
-        owner_name: 'Sanjay Deshmukh',
-        mobile_number: '9850123456',
-        shop_name: `Kisan Agro Center ${city}`,
-        shop_location: `${city}, Maharashtra`,
-        address: `${landmarks[1]}, ${city}, Maharashtra`,
-        product_count: 5,
-        rating: 4.8,
-        reviews_count: 118,
-        distance_km: '1.2',
-        status_text: 'Open Now • 7:30 AM - 8:30 PM',
-        maps_url: `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent('Kisan Agro Center ' + city)}`
-      },
-      {
-        id: 903,
-        owner_name: 'Mahesh Shinde',
-        mobile_number: '9763112233',
-        shop_name: `Mauli Agro Agency & Fertilisers`,
-        shop_location: `${city}, Maharashtra`,
-        address: `${landmarks[2]}, ${city}, Maharashtra`,
-        product_count: 4,
-        rating: 4.7,
-        reviews_count: 95,
-        distance_km: '1.9',
-        status_text: 'Open Now • 8:00 AM - 8:00 PM',
-        maps_url: `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent('Mauli Agro Agency ' + city)}`
-      },
-      {
-        id: 904,
-        owner_name: 'Rajesh Jadhav',
-        mobile_number: '9921445566',
-        shop_name: `Shri Ganesh Fertilisers & Seeds`,
-        shop_location: `${city}, Maharashtra`,
-        address: `${landmarks[3]}, ${city}, Maharashtra`,
-        product_count: 5,
-        rating: 4.9,
-        reviews_count: 165,
-        distance_km: '2.4',
-        status_text: 'Open Now • 8:00 AM - 9:00 PM',
-        maps_url: `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent('Shri Ganesh Fertilisers ' + city)}`
-      },
-      {
-        id: 905,
-        owner_name: 'Anand Kulkarni',
-        mobile_number: '9860223344',
-        shop_name: `Shri Ram Krushi Bhandar`,
-        shop_location: `${city}, Maharashtra`,
-        address: `${landmarks[4]}, ${city}, Maharashtra`,
-        product_count: 4,
-        rating: 4.8,
-        reviews_count: 88,
-        distance_km: '2.9',
-        status_text: 'Open Now • 8:30 AM - 8:30 PM',
-        maps_url: `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent('Shri Ram Krushi Bhandar ' + city)}`
-      },
-      {
-        id: 906,
-        owner_name: 'Pravin Pawar',
-        mobile_number: '9762998877',
-        shop_name: `Mahalaxmi Agro Center`,
-        shop_location: `${city}, Maharashtra`,
-        address: `${landmarks[5]}, ${city}, Maharashtra`,
-        product_count: 3,
-        rating: 4.6,
-        reviews_count: 72,
-        distance_km: '3.5',
-        status_text: 'Open Now • 8:00 AM - 8:00 PM',
-        maps_url: `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent('Mahalaxmi Agro Center ' + city)}`
-      },
-      {
-        id: 907,
-        owner_name: 'Ganesh Thorat',
-        mobile_number: '9922114433',
-        shop_name: `Om Sai Krushi Seva Kendra`,
-        shop_location: `${city}, Maharashtra`,
-        address: `${landmarks[6]}, ${city}, Maharashtra`,
-        product_count: 4,
-        rating: 4.9,
-        reviews_count: 110,
-        distance_km: '4.1',
-        status_text: 'Open Now • 7:00 AM - 8:00 PM',
-        maps_url: `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent('Om Sai Krushi Seva Kendra ' + city)}`
-      },
-      {
-        id: 908,
-        owner_name: 'Vikas More',
-        mobile_number: '9823556677',
-        shop_name: `Dhanuka Agro Mart`,
-        shop_location: `${city}, Maharashtra`,
-        address: `${landmarks[7]}, ${city}, Maharashtra`,
-        product_count: 3,
-        rating: 4.7,
-        reviews_count: 64,
-        distance_km: '4.8',
-        status_text: 'Open Now • 8:00 AM - 9:00 PM',
-        maps_url: `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent('Dhanuka Agro Mart ' + city)}`
-      }
+    // Dynamic location-aware nearby Agro Stores for the user's city
+    const landmarks = ['Main Market Yard', 'Bypass Road Junction', 'Station Road', 'Bus Stand Area', 'Highway Naka', 'College Square', 'Ring Road', 'Old City Market'];
+    const shopBrands = [
+      { name: `${city} Krushi Seva Kendra`, owner: 'Vaibhav Patil', phone: '9822012345', count: 6, rating: 4.9, reviews: 142, dist: '0.8' },
+      { name: `Kisan Agro Center ${city}`, owner: 'Sanjay Deshmukh', phone: '9850123456', count: 5, rating: 4.8, reviews: 118, dist: '1.2' },
+      { name: `Mauli Agro Agency ${city}`, owner: 'Mahesh Shinde', phone: '9763112233', count: 4, rating: 4.7, reviews: 95, dist: '1.9' },
+      { name: `Shri Ganesh Fertilisers & Seeds`, owner: 'Rajesh Jadhav', phone: '9921445566', count: 5, rating: 4.9, reviews: 165, dist: '2.4' },
+      { name: `Shri Ram Krushi Bhandar ${city}`, owner: 'Anand Kulkarni', phone: '9860223344', count: 4, rating: 4.8, reviews: 88, dist: '2.9' },
+      { name: `Mahalaxmi Agro Center ${city}`, owner: 'Pravin Pawar', phone: '9762998877', count: 3, rating: 4.6, reviews: 72, dist: '3.5' },
+      { name: `Om Sai Krushi Seva Kendra`, owner: 'Ganesh Thorat', phone: '9922114433', count: 4, rating: 4.9, reviews: 110, dist: '4.1' },
+      { name: `Dhanuka Agro Mart ${city}`, owner: 'Vikas More', phone: '9823556677', count: 3, rating: 4.7, reviews: 64, dist: '4.8' }
     ];
+
+    const fallbackStores = shopBrands.map((b, idx) => ({
+      id: 901 + idx,
+      owner_name: b.owner,
+      mobile_number: b.phone,
+      shop_name: b.name,
+      shop_location: `${city}, Maharashtra`,
+      address: `${landmarks[idx % landmarks.length]}, ${city}, Maharashtra`,
+      product_count: b.count,
+      rating: b.rating,
+      reviews_count: b.reviews,
+      distance_km: b.dist,
+      status_text: 'Open Now • 8:00 AM - 8:00 PM',
+      maps_url: `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(b.name + ' ' + city)}`
+    }));
 
     // Deduplicate fallback stores against DB stores by normalized shop name
     const seenNames = new Set(stores.map(s => (s.shop_name || '').toLowerCase().replace(/[^a-z0-9]/g, '')));
