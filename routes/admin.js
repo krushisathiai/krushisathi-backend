@@ -142,7 +142,7 @@ router.get('/users', adminMiddleware, async (req, res) => {
     }
 
     const [users] = await db.query(
-      `SELECT id, full_name, mobile_number, email, is_verified, location, farm_size, main_crop, created_at
+      `SELECT id, full_name, mobile_number, email, role, shop_name, shop_location, is_verified, location, farm_size, main_crop, created_at
        FROM users ${whereClause}
        ORDER BY created_at DESC LIMIT ? OFFSET ?`,
       [...params, limit, offset]
@@ -553,15 +553,96 @@ router.get('/shop-products', adminMiddleware, async (req, res) => {
   }
 });
 
-// ─── DELETE SHOP PRODUCT (ADMIN) ──────────────────────────────────────────────
-// DELETE /api/admin/shop-products/:id
-router.delete('/shop-products/:id', adminMiddleware, async (req, res) => {
+// ─── UPDATE USER ROLE (ADMIN) ──────────────────────────────────────────────────
+// PUT /api/admin/users/:id/role
+router.put('/users/:id/role', adminMiddleware, async (req, res) => {
   try {
-    await db.query('DELETE FROM shop_products WHERE id = ?', [req.params.id]);
-    res.json({ success: true, message: 'Shop product deleted successfully' });
+    const { role } = req.body;
+    if (!role || !['user', 'shop_owner', 'admin'].includes(role)) {
+      return res.status(400).json({ success: false, message: 'Valid role is required (user, shop_owner, admin)' });
+    }
+
+    await db.query('UPDATE users SET role = ? WHERE id = ?', [role, req.params.id]);
+    res.json({ success: true, message: `User role updated to ${role}` });
   } catch (err) {
-    console.error('Admin delete shop product error:', err);
-    res.status(500).json({ success: false, message: 'Failed to delete product' });
+    console.error('Admin update user role error:', err);
+    res.status(500).json({ success: false, message: 'Failed to update user role' });
+  }
+});
+
+// ─── DELETE EXPERT QUESTION (ADMIN) ───────────────────────────────────────────
+// DELETE /api/admin/expert-questions/:id
+router.delete('/expert-questions/:id', adminMiddleware, async (req, res) => {
+  try {
+    await db.query('DELETE FROM expert_questions WHERE id = ?', [req.params.id]);
+    res.json({ success: true, message: 'Question deleted successfully' });
+  } catch (err) {
+    console.error('Admin delete expert question error:', err);
+    res.status(500).json({ success: false, message: 'Failed to delete question' });
+  }
+});
+
+// ─── GET FERTILIZERS (ADMIN) ──────────────────────────────────────────────────
+// GET /api/admin/fertilizers
+router.get('/fertilizers', adminMiddleware, async (req, res) => {
+  try {
+    const [fertilizers] = await db.query('SELECT * FROM fertilizer_guide ORDER BY crop_name ASC, id DESC');
+    res.json({ success: true, fertilizers });
+  } catch (err) {
+    console.error('Admin get fertilizers error:', err);
+    res.status(500).json({ success: false, message: 'Failed to fetch fertilizer guide' });
+  }
+});
+
+// ─── CREATE FERTILIZER GUIDE (ADMIN) ─────────────────────────────────────────
+// POST /api/admin/fertilizers
+router.post('/fertilizers', adminMiddleware, async (req, res) => {
+  try {
+    const { crop_name, soil_type, fertilizer_name, fertilizer_type, dose, stage, application_method, notes } = req.body;
+
+    if (!crop_name || !fertilizer_name) {
+      return res.status(400).json({ success: false, message: 'Crop name and fertilizer name are required' });
+    }
+
+    const [result] = await db.query(
+      'INSERT INTO fertilizer_guide (crop_name, soil_type, fertilizer_name, fertilizer_type, dose, stage, application_method, notes) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+      [crop_name.trim(), soil_type || 'Black Soil', fertilizer_name.trim(), fertilizer_type || 'NPK', dose || '', stage || '', application_method || '', notes || '']
+    );
+
+    res.status(201).json({ success: true, message: 'Fertilizer recommendation added successfully', id: result.insertId });
+  } catch (err) {
+    console.error('Admin add fertilizer error:', err);
+    res.status(500).json({ success: false, message: 'Failed to add fertilizer recommendation' });
+  }
+});
+
+// ─── UPDATE FERTILIZER GUIDE (ADMIN) ─────────────────────────────────────────
+// PUT /api/admin/fertilizers/:id
+router.put('/fertilizers/:id', adminMiddleware, async (req, res) => {
+  try {
+    const { crop_name, soil_type, fertilizer_name, fertilizer_type, dose, stage, application_method, notes } = req.body;
+
+    await db.query(
+      'UPDATE fertilizer_guide SET crop_name=?, soil_type=?, fertilizer_name=?, fertilizer_type=?, dose=?, stage=?, application_method=?, notes=? WHERE id=?',
+      [crop_name, soil_type, fertilizer_name, fertilizer_type, dose, stage, application_method, notes, req.params.id]
+    );
+
+    res.json({ success: true, message: 'Fertilizer recommendation updated successfully' });
+  } catch (err) {
+    console.error('Admin update fertilizer error:', err);
+    res.status(500).json({ success: false, message: 'Failed to update fertilizer recommendation' });
+  }
+});
+
+// ─── DELETE FERTILIZER GUIDE (ADMIN) ─────────────────────────────────────────
+// DELETE /api/admin/fertilizers/:id
+router.delete('/fertilizers/:id', adminMiddleware, async (req, res) => {
+  try {
+    await db.query('DELETE FROM fertilizer_guide WHERE id = ?', [req.params.id]);
+    res.json({ success: true, message: 'Fertilizer recommendation deleted successfully' });
+  } catch (err) {
+    console.error('Admin delete fertilizer error:', err);
+    res.status(500).json({ success: false, message: 'Failed to delete fertilizer recommendation' });
   }
 });
 
