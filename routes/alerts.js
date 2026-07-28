@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const db = require('../db');
 const { authMiddleware } = require('../middleware/auth');
+const { clearCachePattern } = require('../middleware/cache');
 
 // ─── GET USER ALERTS ──────────────────────────────────────────────────────────
 // GET /api/alerts  (protected)
@@ -38,6 +39,7 @@ router.put('/:id/read', authMiddleware, async (req, res) => {
       'UPDATE alerts SET is_read = TRUE WHERE id = ? AND (user_id = ? OR user_id IS NULL)',
       [alertId, userId]
     );
+    clearCachePattern('/api/alerts');
     res.json({ success: true, message: 'Alert marked as read' });
   } catch (err) {
     res.status(500).json({ success: false, message: 'Server error' });
@@ -53,6 +55,7 @@ router.put('/read-all/mark', authMiddleware, async (req, res) => {
       'UPDATE alerts SET is_read = TRUE WHERE user_id = ? OR user_id IS NULL',
       [userId]
     );
+    clearCachePattern('/api/alerts');
     res.json({ success: true, message: 'All alerts marked as read' });
   } catch (err) {
     res.status(500).json({ success: false, message: 'Server error' });

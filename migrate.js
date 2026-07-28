@@ -180,6 +180,20 @@ async function migrate() {
     `);
     console.log('Shop inquiries table checked/created.');
 
+    // 10. Performance Indexes for 10k High Load
+    await db.query(`CREATE INDEX IF NOT EXISTS idx_users_mobile ON users(mobile_number)`);
+    await db.query(`CREATE INDEX IF NOT EXISTS idx_scans_user_id ON scans(user_id)`);
+    await db.query(`CREATE INDEX IF NOT EXISTS idx_scans_scanned_at ON scans(scanned_at DESC)`);
+    await db.query(`CREATE INDEX IF NOT EXISTS idx_alerts_user_id ON alerts(user_id)`);
+    await db.query(`CREATE INDEX IF NOT EXISTS idx_alerts_created ON alerts(created_at DESC)`);
+    await db.query(`CREATE INDEX IF NOT EXISTS idx_shop_owner ON shop_products(shop_owner_id)`);
+    await db.query(`CREATE INDEX IF NOT EXISTS idx_shop_status ON shop_products(status)`);
+    await db.query(`CREATE INDEX IF NOT EXISTS idx_shop_inquiries_owner ON shop_inquiries(shop_owner_id)`);
+    await db.query(`CREATE INDEX IF NOT EXISTS idx_expert_questions_user ON expert_questions(user_id)`);
+    await db.query(`CREATE INDEX IF NOT EXISTS idx_crop_diseases_name ON crop_diseases(crop_name)`);
+    await db.query(`CREATE INDEX IF NOT EXISTS idx_fertilizer_crop ON fertilizer_guide(crop_name)`);
+    console.log('Performance indexes verified/created successfully.');
+
     // ─── SEED REFERENCE DATA ───────────────────────────────────────────────────
 
     // Seed Crop Diseases Reference Data
@@ -236,30 +250,60 @@ async function migrate() {
       console.log('Seed alerts populated.');
     }
 
-    // Seed Shop Products
+    // Seed Multiple Shop Owners and Products
     const [existingShopProducts] = await db.query('SELECT id FROM shop_products LIMIT 1');
     if (existingShopProducts.length === 0) {
-      console.log('Seeding shop products...');
-      // Ensure a shop owner user exists
+      console.log('Seeding regional shop owners and products...');
       const shopOwnerPw = await bcrypt.hash('Shop@123', 10);
-      const [shopUserResult] = await db.query(`
+
+      // Shop 1: Sangamner Shop 1
+      const [s1] = await db.query(`
         INSERT INTO users (full_name, mobile_number, email, password, is_verified, role, shop_name, shop_location)
-        VALUES ('Krushi Agro Center', '9876543210', 'shop@krushisathi.com', ?, true, 'shop_owner', 'Krushi Agro Center', 'Pune, Maharashtra')
-        ON CONFLICT (mobile_number) DO UPDATE SET shop_name = 'Krushi Agro Center'
+        VALUES ('Vaibhav Patil', '9822012345', 'vaibhav@krushisathi.com', ?, true, 'shop_owner', 'Vaibhav Krushi Seva Kendra', 'Sangamner, Maharashtra')
+        ON CONFLICT (mobile_number) DO UPDATE SET shop_name = 'Vaibhav Krushi Seva Kendra', shop_location = 'Sangamner, Maharashtra'
         RETURNING id
       `, [shopOwnerPw]);
-      
-      const shopOwnerId = shopUserResult[0]?.id || 1;
+      const shop1Id = s1[0]?.id || 1;
+
+      // Shop 2: Sangamner Shop 2
+      const [s2] = await db.query(`
+        INSERT INTO users (full_name, mobile_number, email, password, is_verified, role, shop_name, shop_location)
+        VALUES ('Sanjay Deshmukh', '9850123456', 'kisan@krushisathi.com', ?, true, 'shop_owner', 'Kisan Agro Center Sangamner', 'Sangamner, Maharashtra')
+        ON CONFLICT (mobile_number) DO UPDATE SET shop_name = 'Kisan Agro Center Sangamner', shop_location = 'Sangamner, Maharashtra'
+        RETURNING id
+      `, [shopOwnerPw]);
+      const shop2Id = s2[0]?.id || 2;
+
+      // Shop 3: Pune Shop
+      const [s3] = await db.query(`
+        INSERT INTO users (full_name, mobile_number, email, password, is_verified, role, shop_name, shop_location)
+        VALUES ('Mahesh Shinde', '9763112233', 'mauli@krushisathi.com', ?, true, 'shop_owner', 'Mauli Agro Center', 'Pune, Maharashtra')
+        ON CONFLICT (mobile_number) DO UPDATE SET shop_name = 'Mauli Agro Center', shop_location = 'Pune, Maharashtra'
+        RETURNING id
+      `, [shopOwnerPw]);
+      const shop3Id = s3[0]?.id || 3;
+
+      // Shop 4: Nashik Shop
+      const [s4] = await db.query(`
+        INSERT INTO users (full_name, mobile_number, email, password, is_verified, role, shop_name, shop_location)
+        VALUES ('Rajesh Jadhav', '9921445566', 'ganesh@krushisathi.com', ?, true, 'shop_owner', 'Shri Ganesh Fertilisers & Seeds', 'Nashik, Maharashtra')
+        ON CONFLICT (mobile_number) DO UPDATE SET shop_name = 'Shri Ganesh Fertilisers & Seeds', shop_location = 'Nashik, Maharashtra'
+        RETURNING id
+      `, [shopOwnerPw]);
+      const shop4Id = s4[0]?.id || 4;
 
       await db.query(`
         INSERT INTO shop_products (shop_owner_id, name, category, company, price, stock_quantity, unit, description, image_url, status) VALUES
         (?, 'Mancozeb 75% WP Fungicide', 'Pesticides', 'Tata Rallis', 350.00, 50, '500g', 'Broad spectrum protective fungicide for leaf spots and blight diseases.', NULL, 'Available'),
         (?, 'NPK 19:19:19 Water Soluble Fertilizer', 'Fertilizer', 'Mahadhan', 180.00, 100, '1kg', '100% water soluble NPK fertilizer for healthy plant vegetative growth.', NULL, 'Available'),
         (?, 'Imidacloprid 17.8% SL Insecticide', 'Pesticides', 'Bayer', 280.00, 40, '250ml', 'Systemic insecticide for whitefly, aphids, and thrips control.', NULL, 'Available'),
-        (?, 'Neem Oil Pure Organic Spray', 'Pesticides', 'Organic India', 220.00, 60, '500ml', 'Natural organic pest repellent and fungicide safe for all crops.', NULL, 'Available'),
-        (?, 'Copper Oxychloride 50% WP', 'Pesticides', 'Dhanuka', 420.00, 30, '500g', 'Effective copper fungicide for downy mildew and bacterial blight.', NULL, 'Available')
-      `, [shopOwnerId, shopOwnerId, shopOwnerId, shopOwnerId, shopOwnerId]);
-      console.log('Seed shop products populated.');
+        (?, 'Neem Oil Pure Organic Spray', 'Organic', 'Organic India', 220.00, 60, '500ml', 'Natural organic pest repellent and fungicide safe for all crops.', NULL, 'Available'),
+        (?, 'Copper Oxychloride 50% WP', 'Pesticides', 'Dhanuka', 420.00, 30, '500g', 'Effective copper fungicide for downy mildew and bacterial blight.', NULL, 'Available'),
+        (?, 'Hybrid Tomato Seeds (Syngenta 3150)', 'Seeds', 'Syngenta', 650.00, 25, '10g', 'High yield disease-resistant tomato seeds suitable for rainy season.', NULL, 'Available'),
+        (?, 'Zinc Sulphate 21% Micronutrient', 'Micronutrients', 'Mahadhan', 240.00, 80, '1kg', 'Corrects zinc deficiency in cotton, paddy, and wheat crop.', NULL, 'Available'),
+        (?, 'Manual Crop Battery Knapsack Sprayer', 'Tools', 'Aspee', 2450.00, 10, '16L', '16-liter heavy duty rechargeable battery sprayer pump.', NULL, 'Available')
+      `, [shop1Id, shop1Id, shop2Id, shop2Id, shop3Id, shop3Id, shop4Id, shop4Id]);
+      console.log('Regional shop owners and products populated successfully.');
     }
 
     console.log('Migration completed successfully.');

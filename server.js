@@ -59,6 +59,15 @@ const diseaseRoutes = require('./routes/diseases');
 const alertRoutes = require('./routes/alerts');
 const shopRoutes = require('./routes/shop');
 
+// ─── CACHE MIDDLEWARE FOR 10K HIGH LOAD ───────────────────────────────────────
+const { cacheMiddleware } = require('./middleware/cache');
+
+// Apply caching to heavy read-only endpoints (5-30 min TTL)
+app.use('/api/diseases', cacheMiddleware(1800)); // 30 min cache
+app.use('/api/fertilizers', cacheMiddleware(1800)); // 30 min cache
+app.use('/api/alerts', cacheMiddleware(300)); // 5 min cache
+app.use('/api/shop', cacheMiddleware(300)); // 5 min cache
+
 // ─── API ROUTES ───────────────────────────────────────────────────────────────
 app.use('/api/auth', authRoutes);
 app.use('/api/scans', scanRoutes);
@@ -75,8 +84,8 @@ app.get('/api/health', (req, res) => {
   res.json({ success: true, message: 'Krushi Sathi AI API is running', timestamp: new Date().toISOString(), version: '1.0.0' });
 });
 
-// ─── WEATHER (Using Open-Meteo API for real data) ───────────────────────────────
-app.get('/api/weather', async (req, res) => {
+// ─── WEATHER (Using Open-Meteo API for real data with 10 min cache) ──────────────
+app.get('/api/weather', cacheMiddleware(600), async (req, res) => {
   try {
     // Defaulting to Sangamner coordinates for now as per plan
     const lat = 19.57;
@@ -209,22 +218,43 @@ app.get('/api/stats', require('./middleware/auth').authMiddleware, async (req, r
 app.use((req, res) => { res.status(404).json({ success: false, message: `Route ${req.method} ${req.originalUrl} not found` }); });
 app.use((err, req, res, next) => { console.error('Server error:', err.stack); res.status(500).json({ success: false, message: err.message || 'Something went wrong' }); });
 
-// ─── START ────────────────────────────────────────────────────────────────────
+// ─── START & CLUSTER SCALABILITY FOR 10K CONCURRENT USERS ───────────────────────
+const cluster = require('cluster');
+const os = require('os');
 const PORT = process.env.PORT || 5000;
 const migrate = require('./migrate');
 
-migrate().then(() => {
-  console.log('Database migration completed.');
-  app.listen(PORT, '0.0.0.0', () => {
-    console.log(`🌱 Krushi Sathi AI API running on http://0.0.0.0:${PORT}`);
-    console.log(`📡 Health check: http://localhost:${PORT}/api/health`);
+const numCPUs = os.cpus().length;
+const isClusterEnabled = process.env.ENABLE_CLUSTER === 'true' && cluster.isMaster;
+
+if (isClusterEnabled && numCPUs > 1) {
+  console.log(`🚀 Primary process ${process.pid} is running. Forking ${numCPUs} worker processes for high-load handling...`);
+  for (let i = 0; i < numCPUs; i++) {
+    cluster.fork();
+  }
+  cluster.on('exit', (worker, code, signal) => {
+    console.warn(`Worker process ${worker.process.pid} died. Restarting worker...`);
+    cluster.fork();
   });
-}).catch((err) => {
-  console.error('Database migration failed to complete on startup:', err);
-  // Still start server even if DB fails to connect initially so logs can be checked
-  app.listen(PORT, '0.0.0.0', () => {
-    console.log(`🌱 Krushi Sathi AI API running on http://0.0.0.0:${PORT} (Migration failed)`);
+} else {
+  migrate().then(() => {
+    console.log('Database migration completed.');
+    const server = app.listen(PORT, '0.0.0.0', () => {
+      console.log(`🌱 Krushi Sathi AI API (PID: ${process.pid}) running on http://0.0.0.0:${PORT}`);
+      console.log(`📡 Health check: http://localhost:${PORT}/api/health`);
+    });
+
+    // Keep-Alive Tuning for 10k concurrent HTTP TCP connection reuse
+    server.keepAliveTimeout = 65000; // 65 seconds
+    server.headersTimeout = 66000; // 66 seconds
+  }).catch((err) => {
+    console.error('Database migration failed to complete on startup:', err);
+    const server = app.listen(PORT, '0.0.0.0', () => {
+      console.log(`🌱 Krushi Sathi AI API running on http://0.0.0.0:${PORT} (Migration failed)`);
+    });
+    server.keepAliveTimeout = 65000;
+    server.headersTimeout = 66000;
   });
-});
+}
 
 module.exports = app;

@@ -6,9 +6,10 @@ const pool = new Pool({
   ssl: process.env.DATABASE_URL && (process.env.DATABASE_URL.includes('neon.tech') || process.env.DATABASE_URL.includes('sslmode=require'))
     ? { rejectUnauthorized: false } 
     : false,
-  max: 25, // Maximum number of clients in pool
-  idleTimeoutMillis: 30000, // Close idle clients after 30 seconds
-  connectionTimeoutMillis: 10000, // Return an error after 10 seconds if connection not established
+  max: parseInt(process.env.DB_POOL_MAX || '35', 10), // Increased max clients in pool for 10k load
+  idleTimeoutMillis: 10000, // Close idle clients fast after 10 seconds to free resources
+  connectionTimeoutMillis: 5000, // Return an error quickly after 5s if DB is congested
+  statement_timeout: 5000, // Prevent runaway queries from locking DB (5s query timeout)
 });
 
 // Handle idle client connection errors to prevent process crash
