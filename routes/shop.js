@@ -242,7 +242,7 @@ router.get('/stores', authMiddleware, async (req, res) => {
     }));
 
     // Dynamic verified nearby Agro Stores for the user's city
-    const landmarks = ['Bypass Road', 'Market Yard', 'Akole Road', 'Bus Stand Area', 'Highway Junction'];
+    const landmarks = ['Bypass Road', 'Market Yard', 'Akole Road', 'Bus Stand Area', 'Highway Junction', 'College Road', 'Station Road', 'Old City Square'];
     const fallbackStores = [
       {
         id: 901,
@@ -299,6 +299,62 @@ router.get('/stores', authMiddleware, async (req, res) => {
         distance_km: '2.4',
         status_text: 'Open Now • 8:00 AM - 9:00 PM',
         maps_url: `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent('Shri Ganesh Fertilisers ' + city)}`
+      },
+      {
+        id: 905,
+        owner_name: 'Anand Kulkarni',
+        mobile_number: '9860223344',
+        shop_name: `Shri Ram Krushi Bhandar`,
+        shop_location: `${city}, Maharashtra`,
+        address: `${landmarks[4]}, ${city}, Maharashtra`,
+        product_count: 4,
+        rating: 4.8,
+        reviews_count: 88,
+        distance_km: '2.9',
+        status_text: 'Open Now • 8:30 AM - 8:30 PM',
+        maps_url: `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent('Shri Ram Krushi Bhandar ' + city)}`
+      },
+      {
+        id: 906,
+        owner_name: 'Pravin Pawar',
+        mobile_number: '9762998877',
+        shop_name: `Mahalaxmi Agro Center`,
+        shop_location: `${city}, Maharashtra`,
+        address: `${landmarks[5]}, ${city}, Maharashtra`,
+        product_count: 3,
+        rating: 4.6,
+        reviews_count: 72,
+        distance_km: '3.5',
+        status_text: 'Open Now • 8:00 AM - 8:00 PM',
+        maps_url: `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent('Mahalaxmi Agro Center ' + city)}`
+      },
+      {
+        id: 907,
+        owner_name: 'Ganesh Thorat',
+        mobile_number: '9922114433',
+        shop_name: `Om Sai Krushi Seva Kendra`,
+        shop_location: `${city}, Maharashtra`,
+        address: `${landmarks[6]}, ${city}, Maharashtra`,
+        product_count: 4,
+        rating: 4.9,
+        reviews_count: 110,
+        distance_km: '4.1',
+        status_text: 'Open Now • 7:00 AM - 8:00 PM',
+        maps_url: `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent('Om Sai Krushi Seva Kendra ' + city)}`
+      },
+      {
+        id: 908,
+        owner_name: 'Vikas More',
+        mobile_number: '9823556677',
+        shop_name: `Dhanuka Agro Mart`,
+        shop_location: `${city}, Maharashtra`,
+        address: `${landmarks[7]}, ${city}, Maharashtra`,
+        product_count: 3,
+        rating: 4.7,
+        reviews_count: 64,
+        distance_km: '4.8',
+        status_text: 'Open Now • 8:00 AM - 9:00 PM',
+        maps_url: `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent('Dhanuka Agro Mart ' + city)}`
       }
     ];
 
