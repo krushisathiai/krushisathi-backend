@@ -52,6 +52,7 @@ router.post('/', authMiddleware, async (req, res) => {
           3. TREATMENT & DOSAGE: Provide specific, actionable remedies with exact chemical/product names and exact dosages (e.g. 2 ml per liter water or 50 kg per acre).
           4. FORMATTING: Use clean bullet points (•) and bold product/chemical names using **Product Name**.
           5. SCRIPT & LANGUAGE: Write strictly in ${langInstruction}. Do NOT output in English if Marathi or Hindi was selected!
+          6. GREETINGS: If the user just says a greeting like "hello", "hi", "namaste", "ram ram" or similar without an agricultural question, simply reply politely in ${langInstruction} asking how you can help them with their crops today, and DO NOT include diagnosis or treatment.
 
           Farmer Question: "${question}"
         `;
