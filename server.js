@@ -214,6 +214,33 @@ app.get('/api/stats', require('./middleware/auth').authMiddleware, async (req, r
   }
 });
 
+// ─── SITE VISITS ──────────────────────────────────────────────────────────────
+app.get('/api/visits', async (req, res) => {
+  const db = require('./db');
+  try {
+    // Ensure table exists safely without migrations
+    await db.query(`CREATE TABLE IF NOT EXISTS site_stats (id INT PRIMARY KEY, visits INT DEFAULT 0)`);
+    
+    // Ensure row exists
+    const [rows] = await db.query('SELECT visits FROM site_stats WHERE id = 1');
+    if (rows.length === 0) {
+      await db.query('INSERT INTO site_stats (id, visits) VALUES (1, 0)');
+    }
+    
+    // Increment if requested
+    if (req.query.increment === 'true') {
+      await db.query('UPDATE site_stats SET visits = visits + 1 WHERE id = 1');
+    }
+    
+    // Get updated count
+    const [updated] = await db.query('SELECT visits FROM site_stats WHERE id = 1');
+    res.json({ success: true, count: updated[0].visits });
+  } catch (err) {
+    console.error('Visits API error:', err.message);
+    res.status(500).json({ success: false, count: 0 });
+  }
+});
+
 // ─── 404 & ERROR ──────────────────────────────────────────────────────────────
 app.use((req, res) => { res.status(404).json({ success: false, message: `Route ${req.method} ${req.originalUrl} not found` }); });
 app.use((err, req, res, next) => { console.error('Server error:', err.stack); res.status(500).json({ success: false, message: err.message || 'Something went wrong' }); });
