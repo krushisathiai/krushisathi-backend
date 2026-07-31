@@ -63,6 +63,18 @@ router.post('/login', async (req, res) => {
   }
 });
 
+// ─── ACTIVE USERS ─────────────────────────────────────────────────────────────
+// GET /api/admin/active-users
+router.get('/active-users', adminMiddleware, async (req, res) => {
+  try {
+    const [users] = await db.query('SELECT id, full_name, mobile_number, email, location, role, is_verified, created_at, updated_at FROM users ORDER BY updated_at DESC LIMIT 50');
+    res.json({ success: true, count: users.length, data: users });
+  } catch (error) {
+    console.error('Fetch active users error:', error);
+    res.status(500).json({ success: false, message: 'Server error' });
+  }
+});
+
 // ─── ADMIN DASHBOARD STATS ───────────────────────────────────────────────────
 // GET /api/admin/dashboard
 router.get('/dashboard', adminMiddleware, async (req, res) => {
