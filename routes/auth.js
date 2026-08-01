@@ -4,13 +4,33 @@ const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const db = require('../db');
 const { authMiddleware } = require('../middleware/auth');
+const multer = require('multer');
+const path = require('path');
+const fs = require('fs');
+
+// Multer storage setup for profile images
+const storage = multer.diskStorage({
+  destination: (req, file, cb) => {
+    const dir = path.join(__dirname, '../uploads/profiles');
+    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+    cb(null, dir);
+  },
+  filename: (req, file, cb) => {
+    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1e9);
+    cb(null, `profile-${uniqueSuffix}${path.extname(file.originalname)}`);
+  },
+});
+const upload = multer({
+  storage,
+  limits: { fileSize: 5 * 1024 * 1024 }, // 5MB
+});
 
 // Helper to generate OTP
 const generateOTP = () => Math.floor(100000 + Math.random() * 900000).toString();
 
 // ─── REGISTER ────────────────────────────────────────────────────────────────
 // POST /api/auth/register
-router.post('/register', async (req, res) => {
+router.post('/register', upload.single('profile_image'), async (req, res) => {
   try {
     const { full_name, mobile_number, email, password, role, shop_name, shop_location } = req.body;
 
@@ -34,10 +54,12 @@ router.post('/register', async (req, res) => {
     // Hash password with strong salt round
     const hashedPassword = await bcrypt.hash(password, 12);
 
+    const profile_image = req.file ? `/uploads/profiles/${req.file.filename}` : null;
+
     // Insert user
     const [result] = await db.query(
-      'INSERT INTO users (full_name, mobile_number, email, password, role, shop_name, shop_location) VALUES (?, ?, ?, ?, ?, ?, ?)',
-      [cleanName, cleanMobile, email ? email.trim() : null, hashedPassword, role || 'user', shop_name ? shop_name.trim() : null, shop_location ? shop_location.trim() : null]
+      'INSERT INTO users (full_name, mobile_number, email, password, role, shop_name, shop_location, profile_image) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+      [cleanName, cleanMobile, email ? email.trim() : null, hashedPassword, role || 'user', shop_name ? shop_name.trim() : null, shop_location ? shop_location.trim() : null, profile_image]
     );
 
     // Generate JWT

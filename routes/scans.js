@@ -45,53 +45,46 @@ function fileToGenerativePart(filePath, mimeType) {
 // Helper to fetch recommended shop products for scan results based on crop/disease context
 async function getRecommendedProducts(diseaseName = '', cropName = '', treatmentAdvice = '') {
   try {
-    const context = `${diseaseName} ${cropName} ${treatmentAdvice}`.toLowerCase();
+    const textToSearch = `${diseaseName} ${treatmentAdvice}`.replace(/[^\w\u0900-\u097F]/g, ' ').toLowerCase();
+    // Exclude common stop words in English/Marathi/Hindi
+    const stopWords = ['this', 'that', 'with', 'from', 'apply', 'spray', 'water', 'per', 'acre', 'and', 'the', 'for', 'रोग', 'उपाय', 'करा', 'प्रति', 'लिटर', 'पाण्यात', 'मिसळून', 'फवारणी', 'आणि', 'देऊ', 'नका', 'त्यामुळे', 'आहे', 'नाही', 'plant', 'healthy'];
+    const words = textToSearch.split(/\s+/).filter(w => w.length > 3 && !stopWords.includes(w));
     
-    let isFungalOrBlight = context.includes('blight') || context.includes('spot') || context.includes('mildew') || context.includes('rust') || context.includes('rot') || context.includes('fungus') || context.includes('बुरशी') || context.includes('फंगस') || context.includes('रोग');
-    let isPestOrInsect = context.includes('aphid') || context.includes('worm') || context.includes('fly') || context.includes('borer') || context.includes('insect') || context.includes('pest') || context.includes('कीटक') || context.includes('मावा') || context.includes('कीड़ा');
-
-    let categoryFilter = '';
-    if (isFungalOrBlight) {
-      categoryFilter = "p.category ILIKE '%pesticide%' OR p.category ILIKE '%fungicide%' OR p.name ILIKE '%fungicide%' OR p.name ILIKE '%mancozeb%' OR p.name ILIKE '%copper%' OR p.description ILIKE '%fungi%' OR p.description ILIKE '%blight%'";
-    } else if (isPestOrInsect) {
-      categoryFilter = "p.category ILIKE '%pesticide%' OR p.category ILIKE '%insecticide%' OR p.name ILIKE '%insecticide%' OR p.name ILIKE '%imidacloprid%' OR p.name ILIKE '%neem%'";
-    } else {
-      categoryFilter = "p.category ILIKE '%fertilizer%' OR p.category ILIKE '%pesticide%' OR p.name ILIKE '%npk%' OR p.name ILIKE '%neem%'";
-    }
-
     let products = [];
-    if (categoryFilter) {
-      const query = `
+    if (words.length > 0) {
+      const qClauses = words.map(() => `p.name ILIKE ? OR p.description ILIKE ? OR p.category ILIKE ?`).join(' OR ');
+      const qParams = [];
+      words.forEach(w => {
+        qParams.push(`%${w}%`, `%${w}%`, `%${w}%`);
+      });
+      
+      const finalQuery = `
         SELECT p.*, u.shop_name, u.shop_location, u.mobile_number 
         FROM shop_products p
         JOIN users u ON p.shop_owner_id = u.id
-        WHERE (${categoryFilter}) 
+        WHERE (${qClauses}) 
           AND (p.status IS NULL OR p.status = 'Available')
-          AND p.name NOT ILIKE '%urea%' AND p.name NOT ILIKE '%युरिया%'
         ORDER BY p.created_at DESC
         LIMIT 4
       `;
-      const [matched] = await db.query(query);
+      
+      const [matched] = await db.query(finalQuery, qParams);
       products = matched;
     }
-
-    // Fallback: If fewer than 2 products matched, return available shop products (excluding Urea)
-    if (!products || products.length < 2) {
-      const fallbackQuery = `
-        SELECT p.*, u.shop_name, u.shop_location, u.mobile_number 
-        FROM shop_products p
-        JOIN users u ON p.shop_owner_id = u.id
-        WHERE (p.status IS NULL OR p.status = 'Available')
-          AND p.name NOT ILIKE '%urea%' AND p.name NOT ILIKE '%युरिया%'
-        ORDER BY CASE 
-          WHEN p.category ILIKE '%pesticide%' OR p.category ILIKE '%fungicide%' THEN 1 
-          WHEN p.name ILIKE '%npk%' OR p.name ILIKE '%neem%' THEN 2
-          ELSE 3 
-        END, p.created_at DESC
-        LIMIT 4
-      `;
-      const [allAvailable] = await db.query(fallbackQuery);
-      products = allAvailable;
+    
+    // Fallback if no specific keyword match is found
+    if (!products || products.length === 0) {
+      const context = `${diseaseName} ${cropName} ${treatmentAdvice}`.toLowerCase();
+      let isFungal = context.includes('blight') || context.includes('spot') || context.includes('fung') || context.includes('बुरशी') || context.includes('करपा') || context.includes('rot');
+      let isPest = context.includes('pest') || context.includes('insect') || context.includes('worm') || context.includes('मावा') || context.includes('अळी') || context.includes('aphid');
+      
+      let q = "SELECT p.*, u.shop_name, u.shop_location, u.mobile_number FROM shop_products p JOIN users u ON p.shop_owner_id = u.id WHERE (p.status IS NULL OR p.status = 'Available') AND p.name NOT ILIKE '%urea%' AND p.name NOT ILIKE '%युरिया%' AND p.name NOT ILIKE '%यूरिया%' ";
+      if (isFungal) q += "AND (p.category ILIKE '%fungi%' OR p.category ILIKE '%pesticide%') ";
+      else if (isPest) q += "AND (p.category ILIKE '%insect%' OR p.category ILIKE '%pesticide%') ";
+      
+      q += "ORDER BY p.created_at DESC LIMIT 4";
+      const [fallback] = await db.query(q);
+      products = fallback;
     }
 
     return products || [];
