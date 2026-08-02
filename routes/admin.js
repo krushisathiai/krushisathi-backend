@@ -48,7 +48,7 @@ router.post('/login', async (req, res) => {
     const token = jwt.sign(
       { email: adminInfo.email, isAdmin: true, role: 'admin', id: adminInfo.id },
       process.env.JWT_SECRET || 'royal_shetkari_super_secret_key_2024',
-      { expiresIn: '7d' }
+      { expiresIn: '365d' }
     );
 
     res.json({

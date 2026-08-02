@@ -66,7 +66,7 @@ router.post('/register', upload.single('profile_image'), async (req, res) => {
     const token = jwt.sign(
       { userId: result.insertId, mobile_number: cleanMobile },
       process.env.JWT_SECRET || 'royal_shetkari_super_secret_key_2024',
-      { expiresIn: process.env.JWT_EXPIRES_IN || '7d' }
+      { expiresIn: process.env.JWT_EXPIRES_IN || '365d' }
     );
 
     // Fetch created user (without password)
@@ -117,7 +117,7 @@ router.post('/login', async (req, res) => {
     const token = jwt.sign(
       { userId: user.id, mobile_number: user.mobile_number },
       process.env.JWT_SECRET || 'royal_shetkari_super_secret_key_2024',
-      { expiresIn: process.env.JWT_EXPIRES_IN || '7d' }
+      { expiresIn: process.env.JWT_EXPIRES_IN || '365d' }
     );
 
     // Return user without password
