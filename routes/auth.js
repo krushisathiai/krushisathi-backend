@@ -51,8 +51,8 @@ router.post('/register', upload.single('profile_image'), async (req, res) => {
       return res.status(409).json({ success: false, message: 'Mobile number already registered' });
     }
 
-    // Hash password with strong salt round
-    const hashedPassword = await bcrypt.hash(password, 12);
+    // Hash password with optimized cost factor (10 is secure but 4x faster than 12)
+    const hashedPassword = await bcrypt.hash(password, 10);
 
     const profile_image = req.file ? `/uploads/profiles/${req.file.filename}` : null;
 
@@ -111,6 +111,14 @@ router.post('/login', async (req, res) => {
     const isMatch = await bcrypt.compare(password, user.password);
     if (!isMatch) {
       return res.status(401).json({ success: false, message: 'Invalid mobile number or password' });
+    }
+
+    // Performance optimization: If user has an old slow hash (cost 12), rehash it to 10 in the background
+    // This fixes the 10-second login delay for existing users automatically on their next successful login.
+    if (user.password && (user.password.startsWith('$2a$12$') || user.password.startsWith('$2b$12$'))) {
+      bcrypt.hash(password, 10).then((newHash) => {
+        db.query('UPDATE users SET password = ? WHERE id = ?', [newHash, user.id]).catch(err => console.error('Rehash error:', err));
+      });
     }
 
     // Generate JWT
@@ -209,7 +217,8 @@ router.post('/reset-password', async (req, res) => {
       return res.status(400).json({ success: false, message: 'OTP has expired. Please request a new one.' });
     }
 
-    const hashedPassword = await bcrypt.hash(new_password, 12);
+    // Hash password with optimized cost factor (10)
+    const hashedPassword = await bcrypt.hash(new_password, 10);
     await db.query(
       'UPDATE users SET password = ?, otp = NULL, otp_expires_at = NULL WHERE mobile_number = ?',
       [hashedPassword, cleanMobile]
