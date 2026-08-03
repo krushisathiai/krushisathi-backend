@@ -71,7 +71,7 @@ router.post('/register', upload.single('profile_image'), async (req, res) => {
 
     // Fetch created user (without password)
     const [users] = await db.query(
-      'SELECT id, full_name, mobile_number, email, role, shop_name, shop_location, is_verified, created_at FROM users WHERE id = ?',
+      'SELECT id, full_name, mobile_number, email, role, shop_name, shop_location, is_verified, profile_image, created_at FROM users WHERE id = ?',
       [result.insertId]
     );
 
@@ -242,25 +242,47 @@ router.get('/profile', authMiddleware, async (req, res) => {
 
 // ─── UPDATE PROFILE ───────────────────────────────────────────────────────────
 // PUT /api/auth/profile (protected)
-router.put('/profile', authMiddleware, async (req, res) => {
+router.put('/profile', authMiddleware, upload.single('profile_image'), async (req, res) => {
   try {
     const { full_name, mobile_number, email, shop_name, shop_location, location, farm_size, main_crop, soil_type } = req.body;
     
-    await db.query(
-      'UPDATE users SET full_name = ?, mobile_number = ?, email = ?, shop_name = ?, shop_location = ?, location = ?, farm_size = ?, main_crop = ?, soil_type = ? WHERE id = ?',
-      [
-        full_name ? full_name.trim() : null,
-        mobile_number ? mobile_number.trim() : null,
-        email ? email.trim() : null,
-        shop_name ? shop_name.trim() : null,
-        shop_location ? shop_location.trim() : null,
-        location ? location.trim() : null,
-        farm_size ? farm_size.trim() : null,
-        main_crop ? main_crop.trim() : null,
-        soil_type ? soil_type.trim() : null,
-        req.user.userId
-      ]
-    );
+    let profileImagePath = null;
+    if (req.file) {
+      profileImagePath = `/uploads/profiles/${req.file.filename}`;
+    }
+
+    if (profileImagePath) {
+      await db.query(
+        'UPDATE users SET full_name = ?, mobile_number = ?, shop_name = ?, shop_location = ?, location = ?, farm_size = ?, main_crop = ?, soil_type = ?, profile_image = ? WHERE id = ?',
+        [
+          full_name ? full_name.trim() : null,
+          mobile_number ? mobile_number.trim() : null,
+          shop_name ? shop_name.trim() : null,
+          shop_location ? shop_location.trim() : null,
+          location ? location.trim() : null,
+          farm_size ? farm_size.trim() : null,
+          main_crop ? main_crop.trim() : null,
+          soil_type ? soil_type.trim() : null,
+          profileImagePath,
+          req.user.userId
+        ]
+      );
+    } else {
+      await db.query(
+        'UPDATE users SET full_name = ?, mobile_number = ?, shop_name = ?, shop_location = ?, location = ?, farm_size = ?, main_crop = ?, soil_type = ? WHERE id = ?',
+        [
+          full_name ? full_name.trim() : null,
+          mobile_number ? mobile_number.trim() : null,
+          shop_name ? shop_name.trim() : null,
+          shop_location ? shop_location.trim() : null,
+          location ? location.trim() : null,
+          farm_size ? farm_size.trim() : null,
+          main_crop ? main_crop.trim() : null,
+          soil_type ? soil_type.trim() : null,
+          req.user.userId
+        ]
+      );
+    }
 
     res.json({ success: true, message: 'Profile updated successfully' });
   } catch (err) {
